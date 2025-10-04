@@ -9,9 +9,8 @@ ALLOWED_NETWORK_RULES = (staging.meteoswiss_network_rule)
 ENABLED = true
 COMMENT = 'External access integration for MeteoSwiss API endpoints';
 
--- Grant usage to appropriate roles
--- GRANT USAGE ON INTEGRATION meteoswiss_integration TO ROLE DATA_ENGINEER;
--- GRANT USAGE ON INTEGRATION meteoswiss_integration TO ROLE DEVELOPER;
+-- Grant usage to SYSADMIN role
+GRANT USAGE ON INTEGRATION meteoswiss_integration TO ROLE SYSADMIN;
 
 -- Verify integration
 SHOW EXTERNAL ACCESS INTEGRATIONS;
