@@ -34,13 +34,14 @@ LIMIT 1;
 -- Test 4: Verify data structure
 SELECT 'Data structure validation' as test_name,
        CASE
-         WHEN json:properties:station:value IS NOT NULL
-          AND json:properties:date:value IS NOT NULL
+         WHEN json:id IS NOT NULL
+          AND json:properties:reference_ts IS NOT NULL
           AND json:properties:value IS NOT NULL
          THEN 'PASS'
          ELSE 'FAIL'
        END as result,
-       json:properties:station:value::STRING as sample_station_id,
-       json:properties:date:value::STRING as sample_timestamp
+       json:id::STRING as sample_station_id,
+       json:properties:reference_ts::STRING as sample_timestamp,
+       json:properties:value::FLOAT as sample_value
 FROM TABLE(utils.get_meteoswiss_data('https://data.geo.admin.ch/ch.meteoschweiz.messwerte-globalstrahlung-10min/ch.meteoschweiz.messwerte-globalstrahlung-10min_en.json'))
 LIMIT 1;

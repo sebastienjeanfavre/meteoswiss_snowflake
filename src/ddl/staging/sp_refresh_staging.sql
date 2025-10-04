@@ -43,14 +43,14 @@ BEGIN
     MERGE INTO staging.stations s
     USING (
         SELECT DISTINCT
-            json_data:properties:station:value::STRING as station_id,
-            json_data:properties:station:name::STRING as station_name,
+            json_data:id::STRING as station_id,
+            json_data:properties:station_name::STRING as station_name,
             json_data:geometry:coordinates[1]::FLOAT as latitude,
             json_data:geometry:coordinates[0]::FLOAT as longitude,
-            json_data:properties:altitude:value::FLOAT as elevation
+            json_data:properties:altitude::FLOAT as elevation
         FROM staging.solar_measurements_raw
         WHERE ingestion_timestamp >= CURRENT_DATE()
-        AND json_data:properties:station:value IS NOT NULL
+        AND json_data:id IS NOT NULL
     ) src ON s.station_id = src.station_id
     WHEN NOT MATCHED THEN
         INSERT (station_id, station_name, latitude, longitude, elevation, updated_at)
