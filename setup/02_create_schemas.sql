@@ -6,9 +6,9 @@ USE ROLE SYSADMIN;
 -- Ensure we're using the correct database
 USE DATABASE METEOSWISS;
 
--- Create staging schema for raw data ingestion
-CREATE SCHEMA IF NOT EXISTS staging
-    COMMENT = 'Raw data ingestion from MeteoSwiss API endpoints - stores unprocessed JSON data and metadata tables';
+-- Create bronze schema for raw data ingestion
+CREATE SCHEMA IF NOT EXISTS bronze
+    COMMENT = 'Bronze layer - Raw data ingestion from MeteoSwiss API endpoints (measurements and forecasts)';
 
 -- Create utils schema for utility functions and procedures
 CREATE SCHEMA IF NOT EXISTS utils

@@ -4,7 +4,7 @@ A Snowflake-based data platform for comprehensive weather measurement analytics 
 
 ## Overview
 
-This project implements a data ingestion and staging platform to process 10-minute interval weather measurements from MeteoSwiss weather stations. The platform enables analysis of weather patterns including temperature, precipitation, solar radiation, wind, humidity, and atmospheric pressure across Switzerland.
+This project implements a data ingestion and bronze platform to process 10-minute interval weather measurements from MeteoSwiss weather stations. The platform enables analysis of weather patterns including temperature, precipitation, solar radiation, wind, humidity, and atmospheric pressure across Switzerland.
 
 ## Architecture
 
@@ -37,7 +37,7 @@ MeteoSwiss STAC API → Python Scripts/Snowpark → Internal Stages → Staging 
 ### Database Schema
 
 **Database Schemas:**
-- `staging` - Raw data ingestion from MeteoSwiss API endpoints
+- `bronze` - Raw data ingestion from MeteoSwiss API endpoints
 - `utils` - Utility functions, procedures, and deployment tools
 
 **Staging Tables:**
@@ -55,7 +55,7 @@ meteoswiss_snowflake/
 │   └── fetch_now_data.py          # Download now data
 ├── src/                   # Core database objects
 │   └── ddl/              # Data Definition Language
-│       ├── staging/      # Snowpark stored procedures and tasks
+│       ├── bronze/      # Snowpark stored procedures and tasks
 │       │   ├── sp_fetch_and_load_recent_data.sql
 │       │   ├── sp_fetch_and_load_now_data.sql
 │       │   ├── task_refresh_recent_data.sql
@@ -131,9 +131,9 @@ The platform processes MeteoSwiss weather measurements including:
 1. Run setup scripts in order (01-09) from the `setup/` folder
 2. Download historical data: `python scripts/fetch_historical_data.py`
 3. Upload historical data using Snowflake CLI (documented in setup/07)
-4. Deploy automation: Run stored procedures and tasks from `src/ddl/staging/`
+4. Deploy automation: Run stored procedures and tasks from `src/ddl/bronze/`
 5. Activate tasks: `ALTER TASK ... RESUME;`
 
 ---
 
-For detailed setup instructions, see comments in each setup script. For automation details, see stored procedure files in `src/ddl/staging/`.
+For detailed setup instructions, see comments in each setup script. For automation details, see stored procedure files in `src/ddl/bronze/`.

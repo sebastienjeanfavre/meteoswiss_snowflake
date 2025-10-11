@@ -5,7 +5,7 @@ USE ROLE ACCOUNTADMIN;
 USE DATABASE METEOSWISS;
 
 -- Create network rule for MeteoSwiss API endpoints
-CREATE OR REPLACE NETWORK RULE staging.meteoswiss_network_rule
+CREATE OR REPLACE NETWORK RULE bronze.meteoswiss_network_rule
 MODE = EGRESS
 TYPE = HOST_PORT
 VALUE_LIST = ('data.geo.admin.ch');

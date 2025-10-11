@@ -4,7 +4,7 @@
 -- Executes a SQL file from the MeteoSwiss git repository
 --
 -- Parameters:
---   file_path - Path to SQL file in git repository (e.g., 'src/ddl/staging/table.sql')
+--   file_path - Path to SQL file in git repository (e.g., 'src/ddl/bronze/table.sql')
 -- ============================================================================
 
 USE ROLE SYSADMIN;

@@ -3,7 +3,11 @@
     "allow": [
       "Read(//c/Users/sjean/dev/**)",
       "WebSearch",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "WebFetch(domain:opendatadocs.meteoswiss.ch)",
+      "WebFetch(domain:github.com)",
+      "Bash(mv:*)",
+      "WebFetch(domain:docs.snowflake.com)"
     ],
     "deny": [],
     "ask": []

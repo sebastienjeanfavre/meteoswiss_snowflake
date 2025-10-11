@@ -12,13 +12,13 @@
 
 USE ROLE SYSADMIN;
 USE DATABASE METEOSWISS;
-USE SCHEMA STAGING;
+USE SCHEMA BRONZE;
 
 -- ============================================================================
 -- 1. CREATE FILE FORMAT
 -- ============================================================================
 -- CSV files use semicolon (;) as delimiter
-CREATE OR REPLACE FILE FORMAT staging.meteoswiss_csv_format
+CREATE OR REPLACE FILE FORMAT bronze.meteoswiss_csv_format
     TYPE = 'CSV'
     FIELD_DELIMITER = ';'
     SKIP_HEADER = 1
@@ -30,14 +30,14 @@ CREATE OR REPLACE FILE FORMAT staging.meteoswiss_csv_format
     DATE_FORMAT = 'DD.MM.YYYY HH24:MI'
     TIMESTAMP_FORMAT = 'DD.MM.YYYY HH24:MI';
 
-COMMENT ON FILE FORMAT staging.meteoswiss_csv_format IS
+COMMENT ON FILE FORMAT bronze.meteoswiss_csv_format IS
     'File format for MeteoSwiss semicolon-delimited CSV files';
 
 -- ============================================================================
 -- 2. CREATE INTERNAL STAGE
 -- ============================================================================
-CREATE OR REPLACE STAGE staging.meteoswiss_historical_stage
-    FILE_FORMAT = staging.meteoswiss_csv_format
+CREATE OR REPLACE STAGE bronze.meteoswiss_historical_stage
+    FILE_FORMAT = bronze.meteoswiss_csv_format
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Stage for MeteoSwiss historical weather data CSV files';
 
@@ -45,7 +45,7 @@ CREATE OR REPLACE STAGE staging.meteoswiss_historical_stage
 -- 3. CREATE HISTORICAL MEASUREMENTS TABLE
 -- ============================================================================
 -- Table structure based on MeteoSwiss 10-minute data columns
-CREATE OR REPLACE TABLE staging.weather_measurements_10min_historical (
+CREATE OR REPLACE TABLE bronze.weather_measurements_10min_historical (
     -- Metadata
     station_abbr VARCHAR(10),
     reference_timestamp TIMESTAMP_NTZ,
@@ -101,12 +101,12 @@ CREATE OR REPLACE TABLE staging.weather_measurements_10min_historical (
 );
 
 -- Add table and column comments
-COMMENT ON TABLE staging.weather_measurements_10min_historical IS
+COMMENT ON TABLE bronze.weather_measurements_10min_historical IS
     'Historical 10-minute weather measurements from MeteoSwiss stations (backfill data)';
-COMMENT ON COLUMN staging.weather_measurements_10min_historical.station_abbr IS 'Station abbreviation code';
-COMMENT ON COLUMN staging.weather_measurements_10min_historical.reference_timestamp IS 'Measurement timestamp (10-minute intervals)';
-COMMENT ON COLUMN staging.weather_measurements_10min_historical.gre000z0 IS 'Global solar radiation in W/m²';
-COMMENT ON COLUMN staging.weather_measurements_10min_historical.file_name IS 'Source CSV filename for audit trail';
+COMMENT ON COLUMN bronze.weather_measurements_10min_historical.station_abbr IS 'Station abbreviation code';
+COMMENT ON COLUMN bronze.weather_measurements_10min_historical.reference_timestamp IS 'Measurement timestamp (10-minute intervals)';
+COMMENT ON COLUMN bronze.weather_measurements_10min_historical.gre000z0 IS 'Global solar radiation in W/m²';
+COMMENT ON COLUMN bronze.weather_measurements_10min_historical.file_name IS 'Source CSV filename for audit trail';
 
 -- ============================================================================
 -- 4. DOWNLOAD HISTORICAL DATA (RUN FROM LOCAL MACHINE)
@@ -126,10 +126,10 @@ COMMENT ON COLUMN staging.weather_measurements_10min_historical.file_name IS 'So
 -- Install Snowflake CLI and configure connection
 -- From Snowflake CLI, cd to the root folder of the project and run:
 --
--- snow stage copy ./meteoswiss_data/historical/ @meteoswiss.staging.meteoswiss_historical_stage --recursive
+-- snow stage copy ./meteoswiss_data/historical/ @meteoswiss.bronze.meteoswiss_historical_stage --recursive
 --
 -- After upload completes, verify files are uploaded:
-LIST @staging.meteoswiss_historical_stage;
+LIST @bronze.meteoswiss_historical_stage;
 
 
 -- ============================================================================
@@ -137,7 +137,7 @@ LIST @staging.meteoswiss_historical_stage;
 -- ============================================================================
 
 -- Load all CSV files from stage
-COPY INTO staging.weather_measurements_10min_historical
+COPY INTO bronze.weather_measurements_10min_historical
 FROM (
     SELECT
         $1::VARCHAR as station_abbr,
@@ -173,7 +173,7 @@ FROM (
         TRY_CAST($31 AS NUMBER(38,10)) as sre000z0,
         METADATA$FILENAME as file_name,
         CURRENT_TIMESTAMP() as loaded_at
-    FROM @staging.meteoswiss_historical_stage
+    FROM @bronze.meteoswiss_historical_stage
 )
 PATTERN = '.*t_historical_.*\\.csv'
 ON_ERROR = ABORT_STATEMENT
@@ -192,7 +192,7 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 
 -- Count total records
 SELECT COUNT(*) as total_records
-FROM staging.weather_measurements_10min_historical;
+FROM bronze.weather_measurements_10min_historical;
 
 -- Count records by station
 SELECT
@@ -201,7 +201,7 @@ SELECT
     MIN(reference_timestamp) as earliest_measurement,
     MAX(reference_timestamp) as latest_measurement,
     DATEDIFF(day, MIN(reference_timestamp), MAX(reference_timestamp)) as days_of_data
-FROM staging.weather_measurements_10min_historical
+FROM bronze.weather_measurements_10min_historical
 GROUP BY station_abbr
 ORDER BY station_abbr;
 
@@ -214,11 +214,11 @@ SELECT
     ROUND((COUNT(tre200s0) / COUNT(*)) * 100, 2) as temperature_fill_pct,
     COUNT(rre150z0) as precipitation_count,
     ROUND((COUNT(rre150z0) / COUNT(*)) * 100, 2) as precipitation_fill_pct
-FROM staging.weather_measurements_10min_historical;
+FROM bronze.weather_measurements_10min_historical;
 
 -- Sample data for verification
 SELECT *
-FROM staging.weather_measurements_10min_historical
+FROM bronze.weather_measurements_10min_historical
 LIMIT 100;
 
 -- Check for duplicate timestamps per station
@@ -226,7 +226,7 @@ SELECT
     station_abbr,
     reference_timestamp,
     COUNT(*) as duplicate_count
-FROM staging.weather_measurements_10min_historical
+FROM bronze.weather_measurements_10min_historical
 GROUP BY station_abbr, reference_timestamp
 HAVING COUNT(*) > 1
 ORDER BY duplicate_count DESC;

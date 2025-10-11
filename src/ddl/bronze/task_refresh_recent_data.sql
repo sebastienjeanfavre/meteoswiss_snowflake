@@ -10,22 +10,22 @@
 
 USE ROLE SYSADMIN;
 USE DATABASE METEOSWISS;
-USE SCHEMA STAGING;
+USE SCHEMA BRONZE;
 
 -- Create the task
-CREATE OR REPLACE TASK staging.task_refresh_recent_data
+CREATE OR REPLACE TASK bronze.task_refresh_recent_data
     WAREHOUSE = METEOSWISS_WH
     SCHEDULE = 'USING CRON 0 13 * * * UTC'
     COMMENT = 'Daily task to fetch and load recent weather data from MeteoSwiss STAC API'
 AS
-    CALL staging.sp_fetch_and_load_recent_data();
+    CALL bronze.sp_fetch_and_load_recent_data();
 
 -- Task is created in SUSPENDED state by default
 -- To enable the task, run:
--- ALTER TASK staging.task_refresh_recent_data RESUME;
+-- ALTER TASK bronze.task_refresh_recent_data RESUME;
 
 -- To check task status:
--- SHOW TASKS LIKE 'task_refresh_recent_data' IN SCHEMA staging;
+-- SHOW TASKS LIKE 'task_refresh_recent_data' IN SCHEMA bronze;
 
 -- To view task run history:
 -- SELECT *
@@ -36,4 +36,4 @@ AS
 -- ORDER BY SCHEDULED_TIME DESC;
 
 -- To manually execute the task (for testing):
--- EXECUTE TASK staging.task_refresh_recent_data;
+-- EXECUTE TASK bronze.task_refresh_recent_data;

@@ -17,14 +17,14 @@
 
 USE ROLE SYSADMIN;
 USE DATABASE METEOSWISS;
-USE SCHEMA STAGING;
+USE SCHEMA BRONZE;
 
 -- ============================================================================
 -- 1. CREATE INTERNAL STAGE FOR REALTIME DATA
 -- ============================================================================
 -- Reuses the same file format (meteoswiss_csv_format) created in script 07
-CREATE OR REPLACE STAGE staging.meteoswiss_now_stage
-    FILE_FORMAT = staging.meteoswiss_csv_format
+CREATE OR REPLACE STAGE bronze.meteoswiss_now_stage
+    FILE_FORMAT = bronze.meteoswiss_csv_format
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Stage for MeteoSwiss realtime weather data CSV files (yesterday 12 UTC to now)';
 
@@ -32,7 +32,7 @@ CREATE OR REPLACE STAGE staging.meteoswiss_now_stage
 -- 2. CREATE REALTIME MEASUREMENTS TABLE
 -- ============================================================================
 -- Same schema as historical and recent tables, but for realtime data
-CREATE OR REPLACE TABLE staging.weather_measurements_10min_now (
+CREATE OR REPLACE TABLE bronze.weather_measurements_10min_now (
     -- Metadata
     station_abbr VARCHAR(10),
     reference_timestamp TIMESTAMP_NTZ,
@@ -88,12 +88,12 @@ CREATE OR REPLACE TABLE staging.weather_measurements_10min_now (
 );
 
 -- Add table and column comments
-COMMENT ON TABLE staging.weather_measurements_10min_now IS
+COMMENT ON TABLE bronze.weather_measurements_10min_now IS
     'Realtime 10-minute weather measurements from MeteoSwiss stations (yesterday 12 UTC to now, updated every 10 minutes)';
-COMMENT ON COLUMN staging.weather_measurements_10min_now.station_abbr IS 'Station abbreviation code';
-COMMENT ON COLUMN staging.weather_measurements_10min_now.reference_timestamp IS 'Measurement timestamp (10-minute intervals)';
-COMMENT ON COLUMN staging.weather_measurements_10min_now.gre000z0 IS 'Global solar radiation in W/m²';
-COMMENT ON COLUMN staging.weather_measurements_10min_now.file_name IS 'Source CSV filename for audit trail';
+COMMENT ON COLUMN bronze.weather_measurements_10min_now.station_abbr IS 'Station abbreviation code';
+COMMENT ON COLUMN bronze.weather_measurements_10min_now.reference_timestamp IS 'Measurement timestamp (10-minute intervals)';
+COMMENT ON COLUMN bronze.weather_measurements_10min_now.gre000z0 IS 'Global solar radiation in W/m²';
+COMMENT ON COLUMN bronze.weather_measurements_10min_now.file_name IS 'Source CSV filename for audit trail';
 
 -- ============================================================================
 -- 3. DOWNLOAD REALTIME DATA (OPTIONAL - FOR INITIAL SETUP ONLY)
@@ -117,10 +117,10 @@ COMMENT ON COLUMN staging.weather_measurements_10min_now.file_name IS 'Source CS
 -- For INITIAL SETUP ONLY, manually upload files:
 -- From SnowSQL or Snowflake CLI, run:
 --
--- snow stage copy ./meteoswiss_data/now/ @meteoswiss.staging.meteoswiss_now_stage --recursive
+-- snow stage copy ./meteoswiss_data/now/ @meteoswiss.bronze.meteoswiss_now_stage --recursive
 --
 -- After upload completes, verify files are uploaded:
-LIST @staging.meteoswiss_now_stage;
+LIST @bronze.meteoswiss_now_stage;
 
 
 -- ============================================================================
@@ -128,10 +128,10 @@ LIST @staging.meteoswiss_now_stage;
 -- ============================================================================
 
 -- Truncate table first to remove old data (realtime data is a complete snapshot)
-TRUNCATE TABLE staging.weather_measurements_10min_now;
+TRUNCATE TABLE bronze.weather_measurements_10min_now;
 
 -- Load all CSV files from stage
-COPY INTO staging.weather_measurements_10min_now
+COPY INTO bronze.weather_measurements_10min_now
 FROM (
     SELECT
         $1::VARCHAR as station_abbr,
@@ -167,7 +167,7 @@ FROM (
         TRY_CAST($31 AS NUMBER(38,10)) as sre000z0,
         METADATA$FILENAME as file_name,
         CURRENT_TIMESTAMP() as loaded_at
-    FROM @staging.meteoswiss_now_stage
+    FROM @bronze.meteoswiss_now_stage
 )
 PATTERN = '.*t_now\\.csv'
 ON_ERROR = CONTINUE
@@ -186,7 +186,7 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 
 -- Count total records
 SELECT COUNT(*) as total_records
-FROM staging.weather_measurements_10min_now;
+FROM bronze.weather_measurements_10min_now;
 
 -- Count records by station
 SELECT
@@ -195,7 +195,7 @@ SELECT
     MIN(reference_timestamp) as earliest_measurement,
     MAX(reference_timestamp) as latest_measurement,
     DATEDIFF(hour, MIN(reference_timestamp), MAX(reference_timestamp)) as hours_of_data
-FROM staging.weather_measurements_10min_now
+FROM bronze.weather_measurements_10min_now
 GROUP BY station_abbr
 ORDER BY station_abbr;
 
@@ -208,7 +208,7 @@ SELECT
     ROUND((COUNT(tre200s0) / COUNT(*)) * 100, 2) as temperature_fill_pct,
     COUNT(rre150z0) as precipitation_count,
     ROUND((COUNT(rre150z0) / COUNT(*)) * 100, 2) as precipitation_fill_pct
-FROM staging.weather_measurements_10min_now;
+FROM bronze.weather_measurements_10min_now;
 
 -- Verify data is from last ~24 hours
 SELECT
@@ -216,11 +216,11 @@ SELECT
     MAX(reference_timestamp) as latest_date,
     DATEDIFF(hour, MIN(reference_timestamp), CURRENT_TIMESTAMP()) as hours_ago_earliest,
     DATEDIFF(minute, MAX(reference_timestamp), CURRENT_TIMESTAMP()) as minutes_ago_latest
-FROM staging.weather_measurements_10min_now;
+FROM bronze.weather_measurements_10min_now;
 
 -- Sample latest data for verification
 SELECT *
-FROM staging.weather_measurements_10min_now
+FROM bronze.weather_measurements_10min_now
 ORDER BY reference_timestamp DESC
 LIMIT 100;
 
@@ -229,7 +229,7 @@ SELECT
     station_abbr,
     reference_timestamp,
     COUNT(*) as duplicate_count
-FROM staging.weather_measurements_10min_now
+FROM bronze.weather_measurements_10min_now
 GROUP BY station_abbr, reference_timestamp
 HAVING COUNT(*) > 1
 ORDER BY duplicate_count DESC;
@@ -247,16 +247,16 @@ ORDER BY duplicate_count DESC;
 -- - Run every 10 minutes (synchronized with MeteoSwiss update frequency)
 
 -- Step 1: Deploy the stored procedure
--- Run the SQL file: src/ddl/staging/sp_fetch_and_load_now_data.sql
+-- Run the SQL file: src/ddl/bronze/sp_fetch_and_load_now_data.sql
 
 -- Step 2: Deploy the scheduled task
--- Run the SQL file: src/ddl/staging/task_refresh_now_data.sql
+-- Run the SQL file: src/ddl/bronze/task_refresh_now_data.sql
 
 -- Step 3: Activate the task (tasks are created in SUSPENDED state)
--- ALTER TASK staging.task_refresh_now_data RESUME;
+-- ALTER TASK bronze.task_refresh_now_data RESUME;
 
 -- Step 4: Verify task is running
 -- SHOW TASKS LIKE 'task_refresh_now_data' IN SCHEMA staging;
 
 -- To manually test the automation:
--- CALL staging.sp_fetch_and_load_now_data();
+-- CALL bronze.sp_fetch_and_load_now_data();

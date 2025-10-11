@@ -17,14 +17,14 @@
 
 USE ROLE SYSADMIN;
 USE DATABASE METEOSWISS;
-USE SCHEMA STAGING;
+USE SCHEMA BRONZE;
 
 -- ============================================================================
 -- 1. CREATE INTERNAL STAGE FOR RECENT DATA
 -- ============================================================================
 -- Reuses the same file format (meteoswiss_csv_format) created in script 07
-CREATE OR REPLACE STAGE staging.meteoswiss_recent_stage
-    FILE_FORMAT = staging.meteoswiss_csv_format
+CREATE OR REPLACE STAGE bronze.meteoswiss_recent_stage
+    FILE_FORMAT = bronze.meteoswiss_csv_format
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Stage for MeteoSwiss recent weather data CSV files (current year to yesterday)';
 
@@ -32,7 +32,7 @@ CREATE OR REPLACE STAGE staging.meteoswiss_recent_stage
 -- 2. CREATE RECENT MEASUREMENTS TABLE
 -- ============================================================================
 -- Same schema as historical table, but for recent data (current year)
-CREATE OR REPLACE TABLE staging.weather_measurements_10min_recent (
+CREATE OR REPLACE TABLE bronze.weather_measurements_10min_recent (
     -- Metadata
     station_abbr VARCHAR(10),
     reference_timestamp TIMESTAMP_NTZ,
@@ -88,12 +88,12 @@ CREATE OR REPLACE TABLE staging.weather_measurements_10min_recent (
 );
 
 -- Add table and column comments
-COMMENT ON TABLE staging.weather_measurements_10min_recent IS
+COMMENT ON TABLE bronze.weather_measurements_10min_recent IS
     'Recent 10-minute weather measurements from MeteoSwiss stations (current year to yesterday, updated daily at 12 UTC)';
-COMMENT ON COLUMN staging.weather_measurements_10min_recent.station_abbr IS 'Station abbreviation code';
-COMMENT ON COLUMN staging.weather_measurements_10min_recent.reference_timestamp IS 'Measurement timestamp (10-minute intervals)';
-COMMENT ON COLUMN staging.weather_measurements_10min_recent.gre000z0 IS 'Global solar radiation in W/m²';
-COMMENT ON COLUMN staging.weather_measurements_10min_recent.file_name IS 'Source CSV filename for audit trail';
+COMMENT ON COLUMN bronze.weather_measurements_10min_recent.station_abbr IS 'Station abbreviation code';
+COMMENT ON COLUMN bronze.weather_measurements_10min_recent.reference_timestamp IS 'Measurement timestamp (10-minute intervals)';
+COMMENT ON COLUMN bronze.weather_measurements_10min_recent.gre000z0 IS 'Global solar radiation in W/m²';
+COMMENT ON COLUMN bronze.weather_measurements_10min_recent.file_name IS 'Source CSV filename for audit trail';
 
 -- ============================================================================
 -- 3. DOWNLOAD RECENT DATA (OPTIONAL - FOR INITIAL SETUP ONLY)
@@ -118,10 +118,10 @@ COMMENT ON COLUMN staging.weather_measurements_10min_recent.file_name IS 'Source
 -- Install Snowflake CLI and configure connection
 -- From Snowflake CLI, cd to the root folder of the project and run:
 --
--- snow stage copy ./meteoswiss_data/recent/ @meteoswiss.staging.meteoswiss_recent_stage --recursive
+-- snow stage copy ./meteoswiss_data/recent/ @meteoswiss.bronze.meteoswiss_recent_stage --recursive
 --
 -- After upload completes, verify files are uploaded:
-LIST @staging.meteoswiss_recent_stage;
+LIST @bronze.meteoswiss_recent_stage;
 
 
 -- ============================================================================
@@ -129,10 +129,10 @@ LIST @staging.meteoswiss_recent_stage;
 -- ============================================================================
 
 -- Truncate table first to remove old data (recent data is a complete snapshot)
-TRUNCATE TABLE staging.weather_measurements_10min_recent;
+TRUNCATE TABLE bronze.weather_measurements_10min_recent;
 
 -- Load all CSV files from stage
-COPY INTO staging.weather_measurements_10min_recent
+COPY INTO bronze.weather_measurements_10min_recent
 FROM (
     SELECT
         $1::VARCHAR as station_abbr,
@@ -168,7 +168,7 @@ FROM (
         TRY_CAST($31 AS NUMBER(38,10)) as sre000z0,
         METADATA$FILENAME as file_name,
         CURRENT_TIMESTAMP() as loaded_at
-    FROM @staging.meteoswiss_recent_stage
+    FROM @bronze.meteoswiss_recent_stage
 )
 PATTERN = '.*t_recent\\.csv'
 ON_ERROR = ABORT_STATEMENT
@@ -187,7 +187,7 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 
 -- Count total records
 SELECT COUNT(*) as total_records
-FROM staging.weather_measurements_10min_recent;
+FROM bronze.weather_measurements_10min_recent;
 
 -- Count records by station
 SELECT
@@ -196,7 +196,7 @@ SELECT
     MIN(reference_timestamp) as earliest_measurement,
     MAX(reference_timestamp) as latest_measurement,
     DATEDIFF(day, MIN(reference_timestamp), MAX(reference_timestamp)) as days_of_data
-FROM staging.weather_measurements_10min_recent
+FROM bronze.weather_measurements_10min_recent
 GROUP BY station_abbr
 ORDER BY station_abbr;
 
@@ -209,7 +209,7 @@ SELECT
     ROUND((COUNT(tre200s0) / COUNT(*)) * 100, 2) as temperature_fill_pct,
     COUNT(rre150z0) as precipitation_count,
     ROUND((COUNT(rre150z0) / COUNT(*)) * 100, 2) as precipitation_fill_pct
-FROM staging.weather_measurements_10min_recent;
+FROM bronze.weather_measurements_10min_recent;
 
 -- Verify date range is current year
 SELECT
@@ -217,11 +217,11 @@ SELECT
     MAX(reference_timestamp) as latest_date,
     YEAR(MIN(reference_timestamp)) as earliest_year,
     YEAR(MAX(reference_timestamp)) as latest_year
-FROM staging.weather_measurements_10min_recent;
+FROM bronze.weather_measurements_10min_recent;
 
 -- Sample data for verification
 SELECT *
-FROM staging.weather_measurements_10min_recent
+FROM bronze.weather_measurements_10min_recent
 ORDER BY reference_timestamp DESC
 LIMIT 100;
 
@@ -230,7 +230,7 @@ SELECT
     station_abbr,
     reference_timestamp,
     COUNT(*) as duplicate_count
-FROM staging.weather_measurements_10min_recent
+FROM bronze.weather_measurements_10min_recent
 GROUP BY station_abbr, reference_timestamp
 HAVING COUNT(*) > 1
 ORDER BY duplicate_count DESC;
@@ -248,17 +248,17 @@ ORDER BY duplicate_count DESC;
 -- - Run daily at 13:00 UTC (1 hour after MeteoSwiss updates)
 
 -- Step 1: Deploy the stored procedure
--- Run the SQL file: src/ddl/staging/sp_fetch_and_load_recent_data.sql
+-- Run the SQL file: src/ddl/bronze/sp_fetch_and_load_recent_data.sql
 
 -- Step 2: Deploy the scheduled task
--- Run the SQL file: src/ddl/staging/task_refresh_recent_data.sql
+-- Run the SQL file: src/ddl/bronze/task_refresh_recent_data.sql
 
 -- Step 3: Activate the task (tasks are created in SUSPENDED state)
--- ALTER TASK staging.task_refresh_recent_data RESUME;
+-- ALTER TASK bronze.task_refresh_recent_data RESUME;
 
 -- Step 4: Verify task is running
--- SHOW TASKS LIKE 'task_refresh_recent_data' IN SCHEMA staging;
+-- SHOW TASKS LIKE 'task_refresh_recent_data' IN SCHEMA bronze;
 
 -- To manually test the automation:
--- CALL staging.sp_fetch_and_load_recent_data();
+-- CALL bronze.sp_fetch_and_load_recent_data();
 

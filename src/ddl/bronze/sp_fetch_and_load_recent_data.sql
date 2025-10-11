@@ -1,11 +1,11 @@
 -- ============================================================================
--- Snowpark Python Stored Procedure: Fetch and Load Realtime Now Data
+-- Snowpark Python Stored Procedure: Fetch and Load Recent Data
 -- ============================================================================
--- This procedure automates the complete workflow for realtime now data:
+-- This procedure automates the complete workflow for recent data:
 -- 1. Fetches station list from MeteoSwiss STAC API
--- 2. Downloads _t_now.csv files for all stations via HTTP
+-- 2. Downloads _t_recent.csv files for all stations via HTTP
 -- 3. Uploads files to internal stage using Snowpark FileOperation
--- 4. Loads data into weather_measurements_10min_now table
+-- 4. Loads data into weather_measurements_10min_recent table
 -- 5. Returns comprehensive statistics
 --
 -- This eliminates the need for external Python scripts and manual file uploads.
@@ -13,9 +13,9 @@
 
 USE ROLE SYSADMIN;
 USE DATABASE METEOSWISS;
-USE SCHEMA STAGING;
+USE SCHEMA BRONZE;
 
-CREATE OR REPLACE PROCEDURE staging.sp_fetch_and_load_now_data()
+CREATE OR REPLACE PROCEDURE bronze.sp_fetch_and_load_recent_data()
 RETURNS VARIANT
 LANGUAGE PYTHON
 RUNTIME_VERSION = '3.12'
@@ -27,14 +27,18 @@ AS
 $$
 import requests
 import json
+import logging
 from io import BytesIO
 from snowflake.snowpark import Session
 from snowflake.snowpark.files import SnowflakeFile
 
+# Initialize logger
+logger = logging.getLogger("meteoswiss.bronze.recent_data")
+
 # MeteoSwiss STAC API configuration
 STAC_API_BASE = "https://data.geo.admin.ch/api/stac/v1"
 COLLECTION_ID = "ch.meteoschweiz.ogd-smn"
-STAGE_PATH = "@staging.meteoswiss_now_stage"
+STAGE_PATH = "@bronze.meteoswiss_recent_stage"
 
 def fetch_all_stations():
     """
@@ -110,48 +114,81 @@ def main(session: Session) -> dict:
         "errors": []
     }
 
+    logger.info("Starting recent data refresh procedure", extra={
+        "procedure": "sp_fetch_and_load_recent_data",
+        "data_tier": "recent"
+    })
+
     try:
         # Step 1: Clean up old staged files
+        logger.info("Cleaning up old staged files")
         try:
             session.sql(f"REMOVE {STAGE_PATH}").collect()
-        except:
-            pass  # Ignore if stage is empty
+            logger.info("Stage cleanup completed")
+        except Exception as e:
+            logger.info("Stage was empty or cleanup skipped", extra={"reason": str(e)})
 
         # Step 2: Fetch all stations
+        logger.info("Fetching stations from MeteoSwiss STAC API")
         stations = fetch_all_stations()
         stats["stations_total"] = len(stations)
+        logger.info(f"Fetched {len(stations)} stations from API", extra={
+            "stations_total": len(stations)
+        })
 
         # Step 3: Download and upload files
+        logger.info("Starting file download and upload to stage")
         for station in stations:
             station_id = station.get('id')
             assets = station.get('assets', {})
 
-            # Find _t_now.csv file
-            now_file = None
+            # Find _t_recent.csv file
+            recent_file = None
             for name, asset in assets.items():
-                if name.endswith('_t_now.csv'):
-                    now_file = (name, asset.get('href'))
+                if name.endswith('_t_recent.csv'):
+                    recent_file = (name, asset.get('href'))
                     break
 
-            if not now_file:
+            if not recent_file:
                 continue
 
-            filename, url = now_file
+            filename, url = recent_file
 
             # Download and upload
             if download_and_upload_file(session, station_id, url, filename):
                 stats["files_uploaded"] += 1
                 stats["stations_processed"] += 1
+
+                # Log progress every 20 files
+                if stats["files_uploaded"] % 20 == 0:
+                    logger.info(f"Progress: {stats['files_uploaded']} files uploaded", extra={
+                        "files_uploaded": stats["files_uploaded"],
+                        "stations_processed": stats["stations_processed"]
+                    })
             else:
                 stats["files_failed"] += 1
-                stats["errors"].append(f"Failed to upload {filename} for station {station_id}")
+                error_msg = f"Failed to upload {filename} for station {station_id}"
+                stats["errors"].append(error_msg)
+                logger.warning(error_msg, extra={
+                    "station_id": station_id,
+                    "filename": filename
+                })
 
-        # Step 4: Truncate table
-        session.sql("TRUNCATE TABLE staging.weather_measurements_10min_now").collect()
+        logger.info(f"File upload completed: {stats['files_uploaded']} uploaded, {stats['files_failed']} failed", extra={
+            "files_uploaded": stats["files_uploaded"],
+            "files_failed": stats["files_failed"],
+            "stations_processed": stats["stations_processed"]
+        })
 
-        # Step 5: Load data using COPY INTO
+        # Step 4: Create temporary table (same structure as bronze table)
+        logger.info("Creating temporary table for staging data")
+        session.sql("CREATE OR REPLACE TEMPORARY TABLE bronze.temp_weather_measurements_10min_recent LIKE bronze.weather_measurements_10min_recent").collect()
+        logger.info("Temporary table created successfully")
+
+        # Step 5: Load data into temporary table using COPY INTO
+        logger.info("Loading data into temporary table using COPY INTO")
         copy_sql = """
-        COPY INTO staging.weather_measurements_10min_now
+        COPY INTO bronze.temp_weather_measurements_10min_recent
         FROM (
             SELECT
                 $1::VARCHAR as station_abbr,
@@ -187,31 +224,64 @@ def main(session: Session) -> dict:
                 TRY_CAST($31 AS NUMBER(38,10)) as sre000z0,
                 METADATA$FILENAME as file_name,
                 CURRENT_TIMESTAMP() as loaded_at
-            FROM @staging.meteoswiss_now_stage
+            FROM @bronze.meteoswiss_recent_stage
         )
-        PATTERN = '.*_t_now\\.csv'
+        PATTERN = '.*_t_recent\\.csv'
         ON_ERROR = CONTINUE
         FORCE = TRUE
         """
 
         copy_result = session.sql(copy_sql).collect()
+        logger.info("COPY INTO temporary table completed successfully")
+
+        # Step 6: Atomic replacement - INSERT OVERWRITE ensures bronze table is never empty
+        logger.info("Performing atomic replacement with INSERT OVERWRITE")
+        session.sql("INSERT OVERWRITE INTO bronze.weather_measurements_10min_recent SELECT * FROM bronze.temp_weather_measurements_10min_recent").collect()
+        logger.info("INSERT OVERWRITE completed - bronze table updated atomically")
+
+        # Step 7: Clean up temporary table
+        logger.info("Cleaning up temporary table")
+        session.sql("DROP TABLE IF EXISTS bronze.temp_weather_measurements_10min_recent").collect()
 
         # Get row count
         row_count = session.sql(
-            "SELECT COUNT(*) FROM staging.weather_measurements_10min_now"
+            "SELECT COUNT(*) FROM bronze.weather_measurements_10min_recent"
         ).collect()[0][0]
 
         stats["rows_loaded"] = row_count
         stats["end_time"] = str(session.sql("SELECT CURRENT_TIMESTAMP()").collect()[0][0])
         stats["status"] = "SUCCESS"
 
+        logger.info("Recent data refresh completed successfully", extra={
+            "status": "SUCCESS",
+            "stations_total": stats["stations_total"],
+            "stations_processed": stats["stations_processed"],
+            "files_uploaded": stats["files_uploaded"],
+            "files_failed": stats["files_failed"],
+            "rows_loaded": stats["rows_loaded"],
+            "start_time": stats["start_time"],
+            "end_time": stats["end_time"]
+        })
+
     except Exception as e:
         stats["status"] = "FAILED"
-        stats["errors"].append(str(e))
+        error_msg = str(e)
+        stats["errors"].append(error_msg)
         stats["end_time"] = str(session.sql("SELECT CURRENT_TIMESTAMP()").collect()[0][0])
+
+        logger.error("Recent data refresh failed with error", extra={
+            "status": "FAILED",
+            "error": error_msg,
+            "stations_total": stats["stations_total"],
+            "stations_processed": stats["stations_processed"],
+            "files_uploaded": stats["files_uploaded"],
+            "files_failed": stats["files_failed"],
+            "start_time": stats["start_time"],
+            "end_time": stats["end_time"]
+        })
 
     return stats
 $$;
 
-COMMENT ON PROCEDURE staging.sp_fetch_and_load_now_data() IS
-    'Automated procedure to fetch realtime weather data from MeteoSwiss STAC API, upload to stage, and load into table. Runs every 15 minutes.';
+COMMENT ON PROCEDURE bronze.sp_fetch_and_load_recent_data() IS
+    'Automated procedure to fetch recent weather data from MeteoSwiss STAC API, upload to stage, and load into table. Runs daily.';
