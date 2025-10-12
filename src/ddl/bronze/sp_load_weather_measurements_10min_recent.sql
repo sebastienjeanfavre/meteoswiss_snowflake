@@ -1,12 +1,13 @@
 -- ============================================================================
--- Snowpark Python Stored Procedure: Fetch and Load Recent Data
+-- Snowpark Python Stored Procedure: Load Recent Weather Measurements
 -- ============================================================================
 -- This procedure automates the complete workflow for recent data:
 -- 1. Fetches station list from MeteoSwiss STAC API
 -- 2. Downloads _t_recent.csv files for all stations via HTTP
 -- 3. Uploads files to internal stage using Snowpark FileOperation
--- 4. Loads data into weather_measurements_10min_recent table
--- 5. Returns comprehensive statistics
+-- 4. Loads data into temp table, then merges into target table
+-- 5. Uses MERGE with ALL BY NAME for upsert (update existing, insert new)
+-- 6. Returns comprehensive statistics
 --
 -- This eliminates the need for external Python scripts and manual file uploads.
 -- ============================================================================
@@ -234,10 +235,20 @@ def main(session: Session) -> dict:
         copy_result = session.sql(copy_sql).collect()
         logger.info("COPY INTO temporary table completed successfully")
 
-        # Step 6: Atomic replacement - INSERT OVERWRITE ensures bronze table is never empty
-        logger.info("Performing atomic replacement with INSERT OVERWRITE")
-        session.sql("INSERT OVERWRITE INTO bronze.t_weather_measurements_10min_recent SELECT * FROM bronze.temp_weather_measurements_10min_recent").collect()
-        logger.info("INSERT OVERWRITE completed - bronze table updated atomically")
+        # Step 6: Merge data using ALL BY NAME syntax for upsert
+        logger.info("Merging data into bronze table using MERGE ALL BY NAME")
+        merge_sql = """
+        MERGE INTO bronze.t_weather_measurements_10min_recent t
+        USING bronze.temp_weather_measurements_10min_recent s
+        ON t.station_abbr = s.station_abbr
+           AND t.reference_timestamp = s.reference_timestamp
+        WHEN MATCHED THEN
+            UPDATE ALL BY NAME
+        WHEN NOT MATCHED THEN
+            INSERT ALL BY NAME
+        """
+        merge_result = session.sql(merge_sql).collect()
+        logger.info("MERGE completed - bronze table updated with upsert logic")
 
         # Step 7: Clean up temporary table
         logger.info("Cleaning up temporary table")
@@ -284,4 +295,4 @@ def main(session: Session) -> dict:
 $$;
 
 COMMENT ON PROCEDURE bronze.sp_load_weather_measurements_10min_recent() IS
-    'Automated procedure to fetch recent weather data from MeteoSwiss STAC API, upload to stage, and load into table. Runs daily.';
+    'Automated procedure to fetch recent weather data from MeteoSwiss STAC API, upload to stage, and merge into table using upsert logic (update existing, insert new). Runs daily.';
