@@ -2,7 +2,7 @@
 -- Scheduled Task: Refresh Bronze Station Metadata
 -- ============================================================================
 -- This task automates the weekly refresh of weather station metadata by calling
--- the sp_fetch_and_load_stations stored procedure.
+-- the sp_load_weather_stations stored procedure.
 --
 -- Schedule: Weekly on Sunday at 02:00 UTC (stations rarely change)
 -- Warehouse: METEOSWISS_WH
@@ -18,7 +18,7 @@ CREATE OR REPLACE TASK common.task_bronze_stations
     SCHEDULE = 'USING CRON 0 2 * * 0 UTC'
     COMMENT = 'Weekly task to fetch and load station metadata from MeteoSwiss STAC API (runs every Sunday at 02:00 UTC)'
 AS
-    CALL bronze.sp_fetch_and_load_stations();
+    CALL bronze.sp_load_weather_stations();
 
 -- Task is created in SUSPENDED state by default
 -- To enable the task, run:

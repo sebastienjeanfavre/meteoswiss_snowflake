@@ -14,7 +14,7 @@ USE ROLE SYSADMIN;
 USE DATABASE METEOSWISS;
 USE SCHEMA BRONZE;
 
-CREATE OR REPLACE PROCEDURE bronze.sp_fetch_and_load_stations()
+CREATE OR REPLACE PROCEDURE bronze.sp_load_weather_stations()
 RETURNS VARIANT
 LANGUAGE PYTHON
 RUNTIME_VERSION = '3.12'
@@ -78,7 +78,7 @@ def main(session: Session) -> dict:
     }
 
     logger.info("Starting station metadata refresh procedure", extra={
-        "procedure": "sp_fetch_and_load_stations"
+        "procedure": "sp_load_weather_stations"
     })
 
     try:
@@ -188,5 +188,5 @@ def main(session: Session) -> dict:
     return stats
 $$;
 
-COMMENT ON PROCEDURE bronze.sp_fetch_and_load_stations() IS
+COMMENT ON PROCEDURE bronze.sp_load_weather_stations() IS
     'Automated procedure to fetch station metadata from MeteoSwiss STAC API collection asset, upload to stage, and load into table. Runs weekly.';

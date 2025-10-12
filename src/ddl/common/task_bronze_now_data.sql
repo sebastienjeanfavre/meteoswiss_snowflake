@@ -2,7 +2,7 @@
 -- Scheduled Task: Refresh Bronze Now Data
 -- ============================================================================
 -- This task automates the frequent refresh of realtime weather data by calling
--- the sp_fetch_and_load_now_data stored procedure.
+-- the sp_load_weather_measurements_10min_now stored procedure.
 --
 -- Schedule: Every 10 minutes (synchronized with MeteoSwiss update cycle)
 -- Warehouse: METEOSWISS_WH
@@ -18,7 +18,7 @@ CREATE OR REPLACE TASK common.task_bronze_now_data
     SCHEDULE = 'USING CRON */10 * * * * UTC'
     COMMENT = 'Runs every 10 minutes to fetch and load realtime weather data from MeteoSwiss STAC API (synchronized with MeteoSwiss update frequency)'
 AS
-    CALL bronze.sp_fetch_and_load_now_data();
+    CALL bronze.sp_load_weather_measurements_10min_now();
 
 -- Task is created in SUSPENDED state by default
 -- To enable the task, run:

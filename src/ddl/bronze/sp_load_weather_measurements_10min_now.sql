@@ -15,7 +15,7 @@ USE ROLE SYSADMIN;
 USE DATABASE METEOSWISS;
 USE SCHEMA BRONZE;
 
-CREATE OR REPLACE PROCEDURE bronze.sp_fetch_and_load_now_data()
+CREATE OR REPLACE PROCEDURE bronze.sp_load_weather_measurements_10min_now()
 RETURNS VARIANT
 LANGUAGE PYTHON
 RUNTIME_VERSION = '3.12'
@@ -115,7 +115,7 @@ def main(session: Session) -> dict:
     }
 
     logger.info("Starting now data refresh procedure", extra={
-        "procedure": "sp_fetch_and_load_now_data",
+        "procedure": "sp_load_weather_measurements_10min_now",
         "data_tier": "now"
     })
 
@@ -283,5 +283,5 @@ def main(session: Session) -> dict:
     return stats
 $$;
 
-COMMENT ON PROCEDURE bronze.sp_fetch_and_load_now_data() IS
-    'Automated procedure to fetch realtime weather data from MeteoSwiss STAC API, upload to stage, and load into table. Runs every 15 minutes.';
+COMMENT ON PROCEDURE bronze.sp_load_weather_measurements_10min_now() IS
+    'Automated procedure to fetch realtime weather data from MeteoSwiss STAC API, upload to stage, and load into table. Runs every 10 minutes.';

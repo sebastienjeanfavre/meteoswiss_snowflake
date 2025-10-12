@@ -2,7 +2,7 @@
 -- Scheduled Task: Refresh Bronze Recent Data
 -- ============================================================================
 -- This task automates the daily refresh of recent weather data by calling
--- the sp_fetch_and_load_recent_data stored procedure.
+-- the sp_load_weather_measurements_10min_recent stored procedure.
 --
 -- Schedule: Daily at 13:00 UTC (1 hour after MeteoSwiss updates at 12:00 UTC)
 -- Warehouse: METEOSWISS_WH
@@ -18,7 +18,7 @@ CREATE OR REPLACE TASK common.task_bronze_recent_data
     SCHEDULE = 'USING CRON 0 13 * * * UTC'
     COMMENT = 'Daily task to fetch and load recent weather data from MeteoSwiss STAC API'
 AS
-    CALL bronze.sp_fetch_and_load_recent_data();
+    CALL bronze.sp_load_weather_measurements_10min_recent();
 
 -- Task is created in SUSPENDED state by default
 -- To enable the task, run:
