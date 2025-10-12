@@ -35,7 +35,7 @@ logger = logging.getLogger("meteoswiss.bronze.station_metadata")
 
 # MeteoSwiss station metadata URL (collection-level asset)
 STATIONS_CSV_URL = "https://data.geo.admin.ch/ch.meteoschweiz.ogd-smn/ogd-smn_meta_stations.csv"
-STAGE_PATH = "@bronze.meteoswiss_stations_stage"
+STAGE_PATH = "@bronze.stg_meteoswiss_stations"
 FILENAME = "ogd-smn_meta_stations.csv"
 
 def download_and_upload_file(session, url, filename):
@@ -100,7 +100,7 @@ def main(session: Session) -> dict:
 
         # Step 3: Create temporary table (same structure as bronze table)
         logger.info("Creating temporary table for staging data")
-        session.sql("CREATE OR REPLACE TEMPORARY TABLE bronze.temp_weather_stations LIKE bronze.weather_stations").collect()
+        session.sql("CREATE OR REPLACE TEMPORARY TABLE bronze.temp_weather_stations LIKE bronze.t_weather_stations").collect()
         logger.info("Temporary table created successfully")
 
         # Step 4: Load data into temporary table using COPY INTO
@@ -135,7 +135,7 @@ def main(session: Session) -> dict:
                 $24::VARCHAR as station_url_en,
                 METADATA$FILENAME as file_name,
                 CURRENT_TIMESTAMP() as loaded_at
-            FROM @bronze.meteoswiss_stations_stage
+            FROM @bronze.stg_meteoswiss_stations
         )
         PATTERN = '.*meta_stations\\.csv'
         ON_ERROR = CONTINUE
@@ -147,7 +147,7 @@ def main(session: Session) -> dict:
 
         # Step 5: Atomic replacement - INSERT OVERWRITE ensures bronze table is never empty
         logger.info("Performing atomic replacement with INSERT OVERWRITE")
-        session.sql("INSERT OVERWRITE INTO bronze.weather_stations SELECT * FROM bronze.temp_weather_stations").collect()
+        session.sql("INSERT OVERWRITE INTO bronze.t_weather_stations SELECT * FROM bronze.temp_weather_stations").collect()
         logger.info("INSERT OVERWRITE completed - bronze table updated atomically")
 
         # Step 6: Clean up temporary table
@@ -156,7 +156,7 @@ def main(session: Session) -> dict:
 
         # Get row count
         row_count = session.sql(
-            "SELECT COUNT(*) FROM bronze.weather_stations"
+            "SELECT COUNT(*) FROM bronze.t_weather_stations"
         ).collect()[0][0]
 
         stats["rows_loaded"] = row_count

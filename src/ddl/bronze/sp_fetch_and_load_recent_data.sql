@@ -38,7 +38,7 @@ logger = logging.getLogger("meteoswiss.bronze.recent_data")
 # MeteoSwiss STAC API configuration
 STAC_API_BASE = "https://data.geo.admin.ch/api/stac/v1"
 COLLECTION_ID = "ch.meteoschweiz.ogd-smn"
-STAGE_PATH = "@bronze.meteoswiss_recent_stage"
+STAGE_PATH = "@bronze.stg_meteoswiss_recent"
 
 def fetch_all_stations():
     """
@@ -182,7 +182,7 @@ def main(session: Session) -> dict:
 
         # Step 4: Create temporary table (same structure as bronze table)
         logger.info("Creating temporary table for staging data")
-        session.sql("CREATE OR REPLACE TEMPORARY TABLE bronze.temp_weather_measurements_10min_recent LIKE bronze.weather_measurements_10min_recent").collect()
+        session.sql("CREATE OR REPLACE TEMPORARY TABLE bronze.temp_weather_measurements_10min_recent LIKE bronze.t_weather_measurements_10min_recent").collect()
         logger.info("Temporary table created successfully")
 
         # Step 5: Load data into temporary table using COPY INTO
@@ -224,7 +224,7 @@ def main(session: Session) -> dict:
                 TRY_CAST($31 AS NUMBER(38,10)) as sre000z0,
                 METADATA$FILENAME as file_name,
                 CURRENT_TIMESTAMP() as loaded_at
-            FROM @bronze.meteoswiss_recent_stage
+            FROM @bronze.stg_meteoswiss_recent
         )
         PATTERN = '.*_t_recent\\.csv'
         ON_ERROR = CONTINUE
@@ -236,7 +236,7 @@ def main(session: Session) -> dict:
 
         # Step 6: Atomic replacement - INSERT OVERWRITE ensures bronze table is never empty
         logger.info("Performing atomic replacement with INSERT OVERWRITE")
-        session.sql("INSERT OVERWRITE INTO bronze.weather_measurements_10min_recent SELECT * FROM bronze.temp_weather_measurements_10min_recent").collect()
+        session.sql("INSERT OVERWRITE INTO bronze.t_weather_measurements_10min_recent SELECT * FROM bronze.temp_weather_measurements_10min_recent").collect()
         logger.info("INSERT OVERWRITE completed - bronze table updated atomically")
 
         # Step 7: Clean up temporary table
@@ -245,7 +245,7 @@ def main(session: Session) -> dict:
 
         # Get row count
         row_count = session.sql(
-            "SELECT COUNT(*) FROM bronze.weather_measurements_10min_recent"
+            "SELECT COUNT(*) FROM bronze.t_weather_measurements_10min_recent"
         ).collect()[0][0]
 
         stats["rows_loaded"] = row_count

@@ -18,7 +18,7 @@ CREATE OR REPLACE TASK common.task_silver_measurements
     COMMENT = 'Refreshes the unified weather measurements dynamic table after bronze now data is updated'
     AFTER common.task_bronze_now_data
 AS
-    ALTER DYNAMIC TABLE silver.weather_measurements_10min REFRESH;
+    ALTER DYNAMIC TABLE silver.dt_weather_measurements_10min REFRESH;
 
 -- Task is created in SUSPENDED state by default
 -- To enable the task, run:

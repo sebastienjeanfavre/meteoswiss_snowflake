@@ -26,7 +26,7 @@ USE SCHEMA SILVER;
 -- Combines historical, recent, and now tiers with automatic deduplication
 -- Priority: Historical > Recent > Now (most stable, quality-controlled data wins)
 
-CREATE DYNAMIC TABLE IF NOT EXISTS silver.weather_measurements_10min
+CREATE DYNAMIC TABLE IF NOT EXISTS silver.dt_weather_measurements_10min
     TARGET_LAG = '10 minutes'
     WAREHOUSE = METEOSWISS_WH
     AS
@@ -46,7 +46,7 @@ WITH all_measurements AS (
         loaded_at,
         'historical' AS data_tier,
         1 AS tier_priority
-    FROM bronze.weather_measurements_10min_historical
+    FROM bronze.t_weather_measurements_10min_historical
 
     UNION ALL
 
@@ -65,7 +65,7 @@ WITH all_measurements AS (
         loaded_at,
         'recent' AS data_tier,
         2 AS tier_priority
-    FROM bronze.weather_measurements_10min_recent
+    FROM bronze.t_weather_measurements_10min_recent
 
     UNION ALL
 
@@ -84,7 +84,7 @@ WITH all_measurements AS (
         loaded_at,
         'now' AS data_tier,
         3 AS tier_priority
-    FROM bronze.weather_measurements_10min_now
+    FROM bronze.t_weather_measurements_10min_now
 )
 SELECT
     station_abbr,
@@ -105,7 +105,7 @@ QUALIFY ROW_NUMBER() OVER (
     ORDER BY tier_priority ASC
 ) = 1;
 
-COMMENT ON TABLE silver.weather_measurements_10min IS
+COMMENT ON TABLE silver.dt_weather_measurements_10min IS
     'Unified, deduplicated weather measurements (10-minute intervals). Dynamic table automatically refreshes every 10 minutes with incremental updates. Combines historical, recent, and now tiers with priority-based deduplication (Historical > Recent > Now for data quality and stability).';
 
 -- ============================================================================
@@ -113,11 +113,11 @@ COMMENT ON TABLE silver.weather_measurements_10min IS
 -- ============================================================================
 -- Uncomment if table grows to millions of rows and you have time-based queries
 
-ALTER TABLE silver.weather_measurements_10min
+ALTER TABLE silver.dt_weather_measurements_10min
     CLUSTER BY (TO_DATE(reference_timestamp));
 
 -- Monitor clustering:
-SELECT SYSTEM$CLUSTERING_INFORMATION('silver.weather_measurements_10min');
+SELECT SYSTEM$CLUSTERING_INFORMATION('silver.dt_weather_measurements_10min');
 
 -- ============================================================================
 -- DATA QUALITY QUERIES (FOR MONITORING)
@@ -131,13 +131,13 @@ SELECT SYSTEM$CLUSTERING_INFORMATION('silver.weather_measurements_10min');
 --     LISTAGG(DISTINCT data_tier, ', ') as tiers_present
 -- FROM (
 --     SELECT station_abbr, reference_timestamp, 'historical' as data_tier
---     FROM bronze.weather_measurements_10min_historical
+--     FROM bronze.t_weather_measurements_10min_historical
 --     UNION ALL
 --     SELECT station_abbr, reference_timestamp, 'recent' as data_tier
---     FROM bronze.weather_measurements_10min_recent
+--     FROM bronze.t_weather_measurements_10min_recent
 --     UNION ALL
 --     SELECT station_abbr, reference_timestamp, 'now' as data_tier
---     FROM bronze.weather_measurements_10min_now
+--     FROM bronze.t_weather_measurements_10min_now
 -- )
 -- GROUP BY station_abbr, reference_timestamp
 -- HAVING COUNT(DISTINCT data_tier) > 1;
@@ -158,7 +158,7 @@ SELECT SYSTEM$CLUSTERING_INFORMATION('silver.weather_measurements_10min');
 --
 --     -- Which tier provides most recent data
 --     MAX(data_tier) as latest_data_tier
--- FROM silver.weather_measurements_10min
+-- FROM silver.dt_weather_measurements_10min
 -- GROUP BY station_abbr
 -- ORDER BY station_abbr;
 
@@ -167,7 +167,7 @@ SELECT SYSTEM$CLUSTERING_INFORMATION('silver.weather_measurements_10min');
 -- ============================================================================
 
 -- Count total unified records
--- SELECT COUNT(*) as total_records FROM silver.weather_measurements_10min;
+-- SELECT COUNT(*) as total_records FROM silver.dt_weather_measurements_10min;
 
 -- Count by data tier (should show which tier contributes most)
 -- SELECT
@@ -175,7 +175,7 @@ SELECT SYSTEM$CLUSTERING_INFORMATION('silver.weather_measurements_10min');
 --     COUNT(*) as record_count,
 --     MIN(reference_timestamp) as earliest,
 --     MAX(reference_timestamp) as latest
--- FROM silver.weather_measurements_10min
+-- FROM silver.dt_weather_measurements_10min
 -- GROUP BY data_tier
 -- ORDER BY data_tier;
 
@@ -184,18 +184,18 @@ SELECT SYSTEM$CLUSTERING_INFORMATION('silver.weather_measurements_10min');
 --     station_abbr,
 --     reference_timestamp,
 --     COUNT(*) as duplicate_count
--- FROM silver.weather_measurements_10min
+-- FROM silver.dt_weather_measurements_10min
 -- GROUP BY station_abbr, reference_timestamp
 -- HAVING COUNT(*) > 1;
 
 -- Check dynamic table refresh status
--- SHOW DYNAMIC TABLES LIKE 'weather_measurements_10min';
+-- SHOW DYNAMIC TABLES LIKE 'dt_weather_measurements_10min';
 
 -- View refresh history
 -- SELECT *
 -- FROM TABLE(INFORMATION_SCHEMA.DYNAMIC_TABLE_REFRESH_HISTORY(
---     'weather_measurements_10min'
+--     'dt_weather_measurements_10min'
 -- ))
 -- ORDER BY refresh_start_time DESC;
 
-SELECT 'Silver layer weather_measurements_10min created successfully' AS result;
+SELECT 'Silver layer dt_weather_measurements_10min created successfully' AS result;
