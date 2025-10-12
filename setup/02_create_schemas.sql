@@ -18,6 +18,10 @@ CREATE SCHEMA IF NOT EXISTS silver
 CREATE SCHEMA IF NOT EXISTS gold
     COMMENT = 'Gold layer - Business-specific aggregations, analytics, and curated data products';
 
+-- Create common schema for orchestration tasks and shared objects
+CREATE SCHEMA IF NOT EXISTS common
+    COMMENT = 'Common layer - Orchestration tasks, error handling, and shared objects used across data layers';
+
 -- Create utils schema for utility functions and procedures
 CREATE SCHEMA IF NOT EXISTS utils
     COMMENT = 'Utility functions, procedures, and deployment tools for platform management';
