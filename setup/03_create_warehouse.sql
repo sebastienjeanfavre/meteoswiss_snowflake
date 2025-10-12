@@ -5,11 +5,11 @@ USE ROLE ACCOUNTADMIN;
 
 -- Create warehouse for MeteoSwiss operations
 CREATE WAREHOUSE IF NOT EXISTS METEOSWISS_WH
-    WAREHOUSE_SIZE = 'X-SMALL'
-    AUTO_SUSPEND = 300  -- 5 minutes
+    WAREHOUSE_SIZE = 'XSMALL'
+    AUTO_SUSPEND = 60  -- 1 minute
     AUTO_RESUME = TRUE
     MIN_CLUSTER_COUNT = 1
-    MAX_CLUSTER_COUNT = 2
+    MAX_CLUSTER_COUNT = 1
     SCALING_POLICY = 'STANDARD'
     COMMENT = 'Dedicated warehouse for MeteoSwiss solar data processing and analysis';
 

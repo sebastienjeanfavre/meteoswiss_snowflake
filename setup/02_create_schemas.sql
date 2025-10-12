@@ -10,6 +10,14 @@ USE DATABASE METEOSWISS;
 CREATE SCHEMA IF NOT EXISTS bronze
     COMMENT = 'Bronze layer - Raw data ingestion from MeteoSwiss API endpoints (measurements and forecasts)';
 
+-- Create silver schema for cleansed, unified, and deduplicated data
+CREATE SCHEMA IF NOT EXISTS silver
+    COMMENT = 'Silver layer - Cleansed, unified, and deduplicated data';
+
+-- Create gold schema for business-specific aggregations and analytics
+CREATE SCHEMA IF NOT EXISTS gold
+    COMMENT = 'Gold layer - Business-specific aggregations, analytics, and curated data products';
+
 -- Create utils schema for utility functions and procedures
 CREATE SCHEMA IF NOT EXISTS utils
     COMMENT = 'Utility functions, procedures, and deployment tools for platform management';
