@@ -13,7 +13,7 @@ USE DATABASE METEOSWISS;
 USE SCHEMA BRONZE;
 
 CREATE STAGE IF NOT EXISTS bronze.stg_meteoswiss_recent
-    FILE_FORMAT = bronze.meteoswiss_csv_format
+    FILE_FORMAT = bronze.ff_meteoswiss_csv
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Stage for MeteoSwiss recent weather data CSV files (Jan 1 current year to yesterday, updated daily)';
 

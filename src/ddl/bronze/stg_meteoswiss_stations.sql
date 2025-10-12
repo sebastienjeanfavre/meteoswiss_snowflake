@@ -13,7 +13,7 @@ USE DATABASE METEOSWISS;
 USE SCHEMA BRONZE;
 
 CREATE STAGE IF NOT EXISTS bronze.stg_meteoswiss_stations
-    FILE_FORMAT = bronze.meteoswiss_csv_format
+    FILE_FORMAT = bronze.ff_meteoswiss_csv
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Stage for MeteoSwiss station metadata CSV file (updated weekly)';
 

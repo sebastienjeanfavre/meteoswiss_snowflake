@@ -18,34 +18,34 @@ USE SCHEMA BRONZE;
 -- 1. CREATE FILE FORMAT
 -- ============================================================================
 -- CSV files use semicolon (;) as delimiter
-CREATE OR REPLACE FILE FORMAT bronze.meteoswiss_csv_format
+CREATE FILE FORMAT IF NOT EXISTS bronze.ff_meteoswiss_csv
     TYPE = 'CSV'
     FIELD_DELIMITER = ';'
     SKIP_HEADER = 1
     FIELD_OPTIONALLY_ENCLOSED_BY = '"'
     TRIM_SPACE = TRUE
     ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
-    NULL_IF = ('', 'NULL', 'null', '-')
-    EMPTY_FIELD_AS_NULL = TRUE
-    DATE_FORMAT = 'DD.MM.YYYY HH24:MI'
-    TIMESTAMP_FORMAT = 'DD.MM.YYYY HH24:MI';
-
-COMMENT ON FILE FORMAT bronze.meteoswiss_csv_format IS
-    'File format for MeteoSwiss semicolon-delimited CSV files';
+    ESCAPE = 'NONE'
+    ESCAPE_UNENCLOSED_FIELD = 'NONE'
+    DATE_FORMAT = 'AUTO'
+    TIMESTAMP_FORMAT = 'AUTO'
+    NULL_IF = ('', 'NULL', '-')
+    ENCODING = 'UTF8'
+    COMMENT = 'CSV file format for MeteoSwiss data files (semicolon-delimited, UTF-8 encoded, with header row)';
 
 -- ============================================================================
 -- 2. CREATE INTERNAL STAGE
 -- ============================================================================
-CREATE OR REPLACE STAGE bronze.meteoswiss_historical_stage
-    FILE_FORMAT = bronze.meteoswiss_csv_format
+CREATE STAGE IF NOT EXISTS bronze.stg_meteoswiss_historical
+    FILE_FORMAT = bronze.ff_meteoswiss_csv
     DIRECTORY = (ENABLE = TRUE)
-    COMMENT = 'Stage for MeteoSwiss historical weather data CSV files';
+    COMMENT = 'Stage for MeteoSwiss historical weather data CSV files (backfill data from measurement start to Dec 31 last year)';
 
 -- ============================================================================
 -- 3. CREATE HISTORICAL MEASUREMENTS TABLE
 -- ============================================================================
 -- Table structure based on MeteoSwiss 10-minute data columns
-CREATE OR REPLACE TABLE bronze.weather_measurements_10min_historical (
+CREATE TABLE IF NOT EXISTS bronze.t_weather_measurements_10min_historical (
     -- Metadata
     station_abbr VARCHAR(10),
     reference_timestamp TIMESTAMP_NTZ,
@@ -126,10 +126,10 @@ COMMENT ON COLUMN bronze.weather_measurements_10min_historical.file_name IS 'Sou
 -- Install Snowflake CLI and configure connection
 -- From Snowflake CLI, cd to the root folder of the project and run:
 --
--- snow stage copy ./meteoswiss_data/historical/ @meteoswiss.bronze.meteoswiss_historical_stage --recursive
+-- snow stage copy ./meteoswiss_data/historical/ @bronze.stg_meteoswiss_historical --recursive
 --
 -- After upload completes, verify files are uploaded:
-LIST @bronze.meteoswiss_historical_stage;
+LIST @bronze.stg_meteoswiss_historical;
 
 
 -- ============================================================================
@@ -173,7 +173,7 @@ FROM (
         TRY_CAST($31 AS NUMBER(38,10)) as sre000z0,
         METADATA$FILENAME as file_name,
         CURRENT_TIMESTAMP() as loaded_at
-    FROM @bronze.meteoswiss_historical_stage
+    FROM @bronze.stg_meteoswiss_historical
 )
 PATTERN = '.*t_historical_.*\\.csv'
 ON_ERROR = ABORT_STATEMENT

@@ -13,7 +13,7 @@ USE DATABASE METEOSWISS;
 USE SCHEMA BRONZE;
 
 CREATE STAGE IF NOT EXISTS bronze.stg_meteoswiss_historical
-    FILE_FORMAT = bronze.meteoswiss_csv_format
+    FILE_FORMAT = bronze.ff_meteoswiss_csv
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Stage for MeteoSwiss historical weather data CSV files (backfill data from measurement start to Dec 31 last year)';
 
