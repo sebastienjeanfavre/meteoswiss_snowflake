@@ -167,14 +167,16 @@ snow stage list @bronze.stg_meteoswiss_historical
 #### Task Management
 ```sql
 -- Resume automated tasks (measurement data)
-ALTER TASK common.task_bronze_recent_data RESUME;
-ALTER TASK common.task_bronze_now_data RESUME;
-ALTER TASK common.task_bronze_stations RESUME;
+ALTER TASK common.task_bronze_load_weather_measurements_10min_recent RESUME;
+ALTER TASK common.task_bronze_load_weather_measurements_10min_now RESUME;
+ALTER TASK common.task_bronze_load_weather_stations RESUME;
+ALTER TASK common.task_silver_refresh_weather_measurements_10min RESUME;
 
 -- Suspend tasks
-ALTER TASK common.task_bronze_recent_data SUSPEND;
-ALTER TASK common.task_bronze_now_data SUSPEND;
-ALTER TASK common.task_bronze_stations SUSPEND;
+ALTER TASK common.task_bronze_load_weather_measurements_10min_recent SUSPEND;
+ALTER TASK common.task_bronze_load_weather_measurements_10min_now SUSPEND;
+ALTER TASK common.task_bronze_load_weather_stations SUSPEND;
+ALTER TASK common.task_silver_refresh_weather_measurements_10min SUSPEND;
 
 -- Check task status
 SHOW TASKS IN SCHEMA common;
@@ -183,13 +185,13 @@ SHOW TASKS IN SCHEMA common;
 SELECT *
 FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY(
     SCHEDULED_TIME_RANGE_START => DATEADD('day', -7, CURRENT_TIMESTAMP()),
-    TASK_NAME => 'TASK_BRONZE_RECENT_DATA'
+    TASK_NAME => 'TASK_BRONZE_LOAD_WEATHER_MEASUREMENTS_10MIN_RECENT'
 ))
 ORDER BY SCHEDULED_TIME DESC;
 
 -- Manual task execution (testing)
-EXECUTE TASK common.task_bronze_recent_data;
-EXECUTE TASK common.task_bronze_now_data;
+EXECUTE TASK common.task_bronze_load_weather_measurements_10min_recent;
+EXECUTE TASK common.task_bronze_load_weather_measurements_10min_now;
 ```
 
 #### Stored Procedure Calls
