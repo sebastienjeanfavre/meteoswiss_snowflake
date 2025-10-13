@@ -319,3 +319,4 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 - Tasks are created in SUSPENDED state by default - must RESUME manually
 - ACCOUNTADMIN role required for External Access Integration and Network Rules
 - Windows environment: Use Git Bash or similar for Unix-style commands
+- to memorize
