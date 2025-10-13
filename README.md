@@ -19,17 +19,17 @@ MeteoSwiss STAC API → Python Scripts/Snowpark → Internal Stages → Staging 
 
 ### Data Tiers
 
-1. **Historical Data** (`weather_measurements_10min_historical`)
+1. **Historical Data** (`t_weather_measurements_10min_historical`)
    - Coverage: Measurement start → Dec 31 last year
    - Update: Yearly (manual backfill via Python script)
    - Granularity: 10-minute intervals
 
-2. **Recent Data** (`weather_measurements_10min_recent`)
+2. **Recent Data** (`t_weather_measurements_10min_recent`)
    - Coverage: Jan 1 current year → Yesterday
    - Update: Daily at 13:00 UTC (automated via Snowpark)
    - Granularity: 10-minute intervals
 
-3. **Now Data** (`weather_measurements_10min_now`)
+3. **Now Data** (`t_weather_measurements_10min_now`)
    - Coverage: Yesterday 12:00 UTC → Now
    - Update: Every 10 minutes (automated via Snowpark)
    - Granularity: 10-minute intervals
@@ -40,10 +40,11 @@ MeteoSwiss STAC API → Python Scripts/Snowpark → Internal Stages → Staging 
 - `bronze` - Raw data ingestion from MeteoSwiss API endpoints
 - `utils` - Utility functions, procedures, and deployment tools
 
-**Staging Tables:**
-- `weather_measurements_10min_historical` - Historical weather data (backfill)
-- `weather_measurements_10min_recent` - Recent weather data (current year to yesterday)
-- `weather_measurements_10min_now` - Real-time weather data (last ~24 hours)
+**Bronze Tables:**
+- `t_weather_measurements_10min_historical` - Historical weather data (backfill)
+- `t_weather_measurements_10min_recent` - Recent weather data (current year to yesterday)
+- `t_weather_measurements_10min_now` - Real-time weather data (last ~24 hours)
+- `t_weather_stations` - Weather station metadata
 
 ## Project Structure
 
@@ -55,11 +56,15 @@ meteoswiss_snowflake/
 │   └── fetch_now_data.py          # Download now data
 ├── src/                   # Core database objects
 │   └── ddl/              # Data Definition Language
-│       ├── bronze/      # Snowpark stored procedures and tasks
-│       │   ├── sp_fetch_and_load_recent_data.sql
-│       │   ├── sp_fetch_and_load_now_data.sql
-│       │   ├── task_refresh_recent_data.sql
-│       │   └── task_refresh_now_data.sql
+│       ├── bronze/      # Snowpark stored procedures and bronze tables
+│       │   ├── sp_load_weather_measurements_10min_recent.sql
+│       │   ├── sp_load_weather_measurements_10min_now.sql
+│       │   ├── sp_load_weather_stations.sql
+│       │   └── t_*.sql  # Bronze table definitions
+│       ├── common/       # Scheduled tasks
+│       │   ├── task_bronze_recent_data.sql
+│       │   ├── task_bronze_now_data.sql
+│       │   └── task_bronze_stations.sql
 │       └── utils/        # Utility functions
 ├── setup/                # Setup scripts (run in order 01-09)
 │   ├── 01_create_database.sql

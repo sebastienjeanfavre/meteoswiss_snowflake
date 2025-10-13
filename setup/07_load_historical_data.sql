@@ -101,12 +101,12 @@ CREATE TABLE IF NOT EXISTS bronze.t_weather_measurements_10min_historical (
 );
 
 -- Add table and column comments
-COMMENT ON TABLE bronze.weather_measurements_10min_historical IS
+COMMENT ON TABLE bronze.t_weather_measurements_10min_historical IS
     'Historical 10-minute weather measurements from MeteoSwiss stations (backfill data)';
-COMMENT ON COLUMN bronze.weather_measurements_10min_historical.station_abbr IS 'Station abbreviation code';
-COMMENT ON COLUMN bronze.weather_measurements_10min_historical.reference_timestamp IS 'Measurement timestamp (10-minute intervals)';
-COMMENT ON COLUMN bronze.weather_measurements_10min_historical.gre000z0 IS 'Global solar radiation in W/m²';
-COMMENT ON COLUMN bronze.weather_measurements_10min_historical.file_name IS 'Source CSV filename for audit trail';
+COMMENT ON COLUMN bronze.t_weather_measurements_10min_historical.station_abbr IS 'Station abbreviation code';
+COMMENT ON COLUMN bronze.t_weather_measurements_10min_historical.reference_timestamp IS 'Measurement timestamp (10-minute intervals)';
+COMMENT ON COLUMN bronze.t_weather_measurements_10min_historical.gre000z0 IS 'Global solar radiation in W/m²';
+COMMENT ON COLUMN bronze.t_weather_measurements_10min_historical.file_name IS 'Source CSV filename for audit trail';
 
 -- ============================================================================
 -- 4. DOWNLOAD HISTORICAL DATA (RUN FROM LOCAL MACHINE)
@@ -137,7 +137,7 @@ LIST @bronze.stg_meteoswiss_historical;
 -- ============================================================================
 
 -- Load all CSV files from stage
-COPY INTO bronze.weather_measurements_10min_historical
+COPY INTO bronze.t_weather_measurements_10min_historical
 FROM (
     SELECT
         $1::VARCHAR as station_abbr,
@@ -192,7 +192,7 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 
 -- Count total records
 SELECT COUNT(*) as total_records
-FROM bronze.weather_measurements_10min_historical;
+FROM bronze.t_weather_measurements_10min_historical;
 
 -- Count records by station
 SELECT
@@ -201,7 +201,7 @@ SELECT
     MIN(reference_timestamp) as earliest_measurement,
     MAX(reference_timestamp) as latest_measurement,
     DATEDIFF(day, MIN(reference_timestamp), MAX(reference_timestamp)) as days_of_data
-FROM bronze.weather_measurements_10min_historical
+FROM bronze.t_weather_measurements_10min_historical
 GROUP BY station_abbr
 ORDER BY station_abbr;
 
@@ -214,11 +214,11 @@ SELECT
     ROUND((COUNT(tre200s0) / COUNT(*)) * 100, 2) as temperature_fill_pct,
     COUNT(rre150z0) as precipitation_count,
     ROUND((COUNT(rre150z0) / COUNT(*)) * 100, 2) as precipitation_fill_pct
-FROM bronze.weather_measurements_10min_historical;
+FROM bronze.t_weather_measurements_10min_historical;
 
 -- Sample data for verification
 SELECT *
-FROM bronze.weather_measurements_10min_historical
+FROM bronze.t_weather_measurements_10min_historical
 LIMIT 100;
 
 -- Check for duplicate timestamps per station
@@ -226,7 +226,7 @@ SELECT
     station_abbr,
     reference_timestamp,
     COUNT(*) as duplicate_count
-FROM bronze.weather_measurements_10min_historical
+FROM bronze.t_weather_measurements_10min_historical
 GROUP BY station_abbr, reference_timestamp
 HAVING COUNT(*) > 1
 ORDER BY duplicate_count DESC;

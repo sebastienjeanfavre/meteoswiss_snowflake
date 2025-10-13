@@ -112,6 +112,8 @@ def main(session: Session) -> dict:
         "files_uploaded": 0,
         "files_failed": 0,
         "rows_loaded": 0,
+        "rows_inserted": 0,
+        "rows_updated": 0,
         "errors": []
     }
 
@@ -248,7 +250,17 @@ def main(session: Session) -> dict:
             INSERT ALL BY NAME
         """
         merge_result = session.sql(merge_sql).collect()
-        logger.info("MERGE completed - bronze table updated with upsert logic")
+
+        # Extract merge statistics
+        if merge_result and len(merge_result) > 0:
+            merge_row = merge_result[0]
+            stats["rows_inserted"] = merge_row[0] if len(merge_row) > 0 else 0
+            stats["rows_updated"] = merge_row[1] if len(merge_row) > 1 else 0
+
+        logger.info("MERGE completed - bronze table updated with upsert logic", extra={
+            "rows_inserted": stats["rows_inserted"],
+            "rows_updated": stats["rows_updated"]
+        })
 
         # Step 7: Clean up temporary table
         logger.info("Cleaning up temporary table")
@@ -270,6 +282,8 @@ def main(session: Session) -> dict:
             "files_uploaded": stats["files_uploaded"],
             "files_failed": stats["files_failed"],
             "rows_loaded": stats["rows_loaded"],
+            "rows_inserted": stats["rows_inserted"],
+            "rows_updated": stats["rows_updated"],
             "start_time": stats["start_time"],
             "end_time": stats["end_time"]
         })
@@ -287,6 +301,8 @@ def main(session: Session) -> dict:
             "stations_processed": stats["stations_processed"],
             "files_uploaded": stats["files_uploaded"],
             "files_failed": stats["files_failed"],
+            "rows_inserted": stats["rows_inserted"],
+            "rows_updated": stats["rows_updated"],
             "start_time": stats["start_time"],
             "end_time": stats["end_time"]
         })

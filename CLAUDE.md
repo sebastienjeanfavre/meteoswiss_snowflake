@@ -10,7 +10,7 @@ MeteoSwiss Weather Data Platform - A Snowflake-based data ingestion and bronze p
 
 The measurement platform uses three separate data tiers with different update frequencies:
 
-1. **Historical Tier** (`weather_measurements_10min_historical`)
+1. **Historical Tier** (`t_weather_measurements_10min_historical`)
    - Coverage: Measurement start → Dec 31 last year
    - Data files: `*_t_historical_*.csv` (decade files: 1980-1989, 1990-1999, etc.)
    - Update frequency: Yearly (manual backfill)
@@ -18,13 +18,13 @@ The measurement platform uses three separate data tiers with different update fr
      - **Option A**: Snowpark stored procedure (recommended) - fully automated
      - **Option B**: Python script + Snowflake CLI upload + COPY INTO (legacy)
 
-2. **Recent Tier** (`weather_measurements_10min_recent`)
+2. **Recent Tier** (`t_weather_measurements_10min_recent`)
    - Coverage: Jan 1 current year → Yesterday
    - Data files: `*_t_recent.csv`
    - Update frequency: Daily at 13:00 UTC (automated via Snowpark)
    - Loading method: Snowpark stored procedure with Tasks
 
-3. **Now Tier** (`weather_measurements_10min_now`)
+3. **Now Tier** (`t_weather_measurements_10min_now`)
    - Coverage: Yesterday 12:00 UTC → Now
    - Data files: `*_t_now.csv`
    - Update frequency: Every 10 minutes (automated via Snowpark)
@@ -65,7 +65,7 @@ Bronze/Staging (3 tables) → Silver (1 dynamic table) → Gold (business metric
 
 ### Unified Dynamic Table
 
-**Table**: `silver.weather_measurements_10min`
+**Table**: `silver.dt_weather_measurements_10min`
 - ✅ Fast query performance (pre-computed)
 - ✅ Automatic incremental refresh (10-minute lag)
 - ✅ Deduplicated using priority logic
@@ -81,7 +81,7 @@ Bronze/Staging (3 tables) → Silver (1 dynamic table) → Gold (business metric
 ### Usage Examples
 ```sql
 -- Query unified measurement data
-SELECT * FROM silver.weather_measurements_10min
+SELECT * FROM silver.dt_weather_measurements_10min
 WHERE station_abbr = 'BAS'
   AND reference_timestamp >= '2024-01-01';
 
@@ -91,7 +91,7 @@ SELECT
     DATE_TRUNC('day', reference_timestamp) as day,
     AVG(tre200s0) as avg_temp,
     SUM(rre150z0) as total_precip
-FROM silver.weather_measurements_10min
+FROM silver.dt_weather_measurements_10min
 WHERE reference_timestamp >= DATEADD('month', -6, CURRENT_TIMESTAMP())
 GROUP BY station_abbr, day;
 ```
@@ -100,7 +100,7 @@ GROUP BY station_abbr, day;
 ```sql
 -- Check for duplicates (should be 0)
 SELECT station_abbr, reference_timestamp, COUNT(*)
-FROM silver.weather_measurements_10min
+FROM silver.dt_weather_measurements_10min
 GROUP BY station_abbr, reference_timestamp
 HAVING COUNT(*) > 1;
 
@@ -114,14 +114,14 @@ SELECT * FROM silver.data_quality_completeness;
 ### Dynamic Table Management
 ```sql
 -- Monitor refresh status
-SHOW DYNAMIC TABLES LIKE 'weather_measurements_10min';
+SHOW DYNAMIC TABLES LIKE 'dt_weather_measurements_10min';
 
 -- Suspend/resume (cost management)
-ALTER DYNAMIC TABLE silver.weather_measurements_10min SUSPEND;
-ALTER DYNAMIC TABLE silver.weather_measurements_10min RESUME;
+ALTER DYNAMIC TABLE silver.dt_weather_measurements_10min SUSPEND;
+ALTER DYNAMIC TABLE silver.dt_weather_measurements_10min RESUME;
 
 -- Manual refresh if needed
-ALTER DYNAMIC TABLE silver.weather_measurements_10min REFRESH;
+ALTER DYNAMIC TABLE silver.dt_weather_measurements_10min REFRESH;
 ```
 
 **Documentation**: See `docs/SILVER_LAYER_GUIDE.md` for comprehensive usage guide.
@@ -147,10 +147,10 @@ python scripts/fetch_now_data.py
 # These commands are only needed if using legacy Python script method
 
 # Upload historical data to stage (legacy method)
-snow stage copy ./meteoswiss_data/historical/ @meteoswiss.bronze.meteoswiss_historical_stage --recursive
+snow stage copy ./meteoswiss_data/historical/ @bronze.stg_meteoswiss_historical --recursive
 
 # List files in stage
-snow stage list @meteoswiss.bronze.meteoswiss_historical_stage
+snow stage list @bronze.stg_meteoswiss_historical
 ```
 
 ### Snowflake SQL Operations
@@ -167,34 +167,36 @@ snow stage list @meteoswiss.bronze.meteoswiss_historical_stage
 #### Task Management
 ```sql
 -- Resume automated tasks (measurement data)
-ALTER TASK bronze.task_refresh_recent_data RESUME;
-ALTER TASK bronze.task_refresh_now_data RESUME;
+ALTER TASK common.task_bronze_recent_data RESUME;
+ALTER TASK common.task_bronze_now_data RESUME;
+ALTER TASK common.task_bronze_stations RESUME;
 
 -- Suspend tasks
-ALTER TASK bronze.task_refresh_recent_data SUSPEND;
-ALTER TASK bronze.task_refresh_now_data SUSPEND;
+ALTER TASK common.task_bronze_recent_data SUSPEND;
+ALTER TASK common.task_bronze_now_data SUSPEND;
+ALTER TASK common.task_bronze_stations SUSPEND;
 
 -- Check task status
-SHOW TASKS IN SCHEMA bronze;
+SHOW TASKS IN SCHEMA common;
 
 -- View task execution history
 SELECT *
 FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY(
     SCHEDULED_TIME_RANGE_START => DATEADD('day', -7, CURRENT_TIMESTAMP()),
-    TASK_NAME => 'TASK_REFRESH_RECENT_DATA'
+    TASK_NAME => 'TASK_BRONZE_RECENT_DATA'
 ))
 ORDER BY SCHEDULED_TIME DESC;
 
 -- Manual task execution (testing)
-EXECUTE TASK bronze.task_refresh_recent_data;
-EXECUTE TASK bronze.task_refresh_now_data;
+EXECUTE TASK common.task_bronze_recent_data;
+EXECUTE TASK common.task_bronze_now_data;
 ```
 
 #### Stored Procedure Calls
 ```sql
 -- Measurement data refresh procedures (Recent and Now tiers only)
-CALL bronze.sp_fetch_and_load_recent_data();
-CALL bronze.sp_fetch_and_load_now_data();
+CALL bronze.sp_load_weather_measurements_10min_recent();
+CALL bronze.sp_load_weather_measurements_10min_now();
 
 -- Note: Historical data SP has been removed - use legacy Python script + CLI method
 
@@ -205,11 +207,11 @@ CALL utils.sp_execute_sql_from_git('src/ddl/bronze/table.sql');
 #### Data Validation
 ```sql
 -- Check measurement row counts across all tiers
-SELECT 'historical' as tier, COUNT(*) as rows FROM bronze.weather_measurements_10min_historical
+SELECT 'historical' as tier, COUNT(*) as rows FROM bronze.t_weather_measurements_10min_historical
 UNION ALL
-SELECT 'recent' as tier, COUNT(*) as rows FROM bronze.weather_measurements_10min_recent
+SELECT 'recent' as tier, COUNT(*) as rows FROM bronze.t_weather_measurements_10min_recent
 UNION ALL
-SELECT 'now' as tier, COUNT(*) as rows FROM bronze.weather_measurements_10min_now;
+SELECT 'now' as tier, COUNT(*) as rows FROM bronze.t_weather_measurements_10min_now;
 
 -- Check COPY INTO history
 SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
@@ -236,8 +238,8 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 - **External Access Integration**: meteoswiss_integration (for API access)
 - **Network Rule**: meteoswiss_network_rule (allows data.geo.admin.ch)
 - **Git Repository**: utils.meteoswiss_repo (version control integration)
-- **Stages**: meteoswiss_historical_stage, meteoswiss_recent_stage, meteoswiss_now_stage
-- **File Format**: meteoswiss_csv_format (semicolon-delimited CSV)
+- **Stages**: stg_meteoswiss_historical, stg_meteoswiss_recent, stg_meteoswiss_now, stg_meteoswiss_stations
+- **File Format**: ff_meteoswiss_csv (semicolon-delimited CSV)
 
 ### CSV File Format
 - **Delimiter**: Semicolon (;)
@@ -269,8 +271,8 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 ### Modifying Data Loading Logic
 
 **Measurement Data:**
-- **Recent data**: Edit `src/ddl/bronze/sp_fetch_and_load_recent_data.sql`
-- **Now data**: Edit `src/ddl/bronze/sp_fetch_and_load_now_data.sql`
+- **Recent data**: Edit `src/ddl/bronze/sp_load_weather_measurements_10min_recent.sql`
+- **Now data**: Edit `src/ddl/bronze/sp_load_weather_measurements_10min_now.sql`
 - **Historical data**: No automated SP available - use legacy Python script method
 - Recent/Now procedures use temp table + INSERT OVERWRITE pattern to ensure bronze tables never empty:
   1. Create temp table with same structure
@@ -290,9 +292,9 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 
 - `scripts/` - Python scripts for historical measurement data download (local execution, legacy)
 - `src/ddl/bronze/` - Snowpark procedures and tasks for automated data refresh
-  - `sp_fetch_and_load_recent_data.sql` - Recent measurements (daily refresh)
-  - `sp_fetch_and_load_now_data.sql` - Real-time measurements (10-minute refresh)
-  - `task_refresh_*.sql` - Scheduled task definitions
+  - `sp_load_weather_measurements_10min_recent.sql` - Recent measurements (daily refresh)
+  - `sp_load_weather_measurements_10min_now.sql` - Real-time measurements (10-minute refresh)
+  - `sp_load_weather_stations.sql` - Weather station metadata refresh
 - `src/ddl/utils/` - Utility procedures (Git integration, SQL execution)
 - `setup/` - Infrastructure setup scripts (run once, in order)
   - Scripts 01-06: Core infrastructure (database, schemas, external integrations)
