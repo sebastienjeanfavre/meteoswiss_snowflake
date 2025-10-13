@@ -231,7 +231,6 @@ def main(session: Session) -> dict:
         )
         PATTERN = '.*_t_recent\\.csv'
         ON_ERROR = CONTINUE
-        FORCE = TRUE
         """
 
         copy_result = session.sql(copy_sql).collect()

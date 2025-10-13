@@ -118,7 +118,7 @@ def main(session: Session) -> dict:
                 $7::VARCHAR as station_type_it,
                 $8::VARCHAR as station_type_en,
                 $9::VARCHAR as station_dataowner,
-                TRY_TO_DATE($10, 'YYYY-MM-DD') as station_data_since,
+                TRY_TO_DATE($10, 'DD.MM.YYYY') as station_data_since,
                 TRY_CAST($11 AS NUMBER(10,2)) as station_height_masl,
                 TRY_CAST($12 AS NUMBER(10,2)) as station_height_barometer_masl,
                 TRY_CAST($13 AS NUMBER(12,2)) as station_coordinates_lv95_east,
@@ -139,7 +139,6 @@ def main(session: Session) -> dict:
         )
         PATTERN = '.*meta_stations\\.csv'
         ON_ERROR = CONTINUE
-        FORCE = TRUE
         """
 
         copy_result = session.sql(copy_sql).collect()
