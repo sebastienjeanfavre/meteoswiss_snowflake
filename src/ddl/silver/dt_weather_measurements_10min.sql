@@ -27,7 +27,7 @@ USE SCHEMA SILVER;
 -- Priority: Historical > Recent > Now (most stable, quality-controlled data wins)
 
 CREATE DYNAMIC TABLE IF NOT EXISTS silver.dt_weather_measurements_10min
-    TARGET_LAG = '10 minutes'
+    TARGET_LAG = '24 hours'
     WAREHOUSE = METEOSWISS_WH
     AS
 WITH all_measurements AS (
