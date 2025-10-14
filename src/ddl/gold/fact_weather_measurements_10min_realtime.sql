@@ -1,13 +1,13 @@
 -- ============================================================================
--- Gold Layer - Weather Measurements Fact Table (Standard)
+-- Gold Layer - Weather Measurements Fact Table (Realtime)
 -- ============================================================================
--- Business-friendly fact table for 10-minute weather measurements.
--- Includes historical and recent data tiers (excludes live "now" data).
+-- Business-friendly fact table for 10-minute weather measurements with realtime data.
+-- Includes all three data tiers: historical, recent, and now (live updates).
 -- Provides clean, denormalized measurement data with business-friendly names.
 --
--- Coverage: All historical data + recent data (up to yesterday)
+-- Coverage: All historical data + recent data + live data (last 24 hours)
 -- Grain: One row per station per 10-minute interval
--- Usage: Standard analytics and reporting for historical weather data
+-- Usage: Premium analytics with realtime weather monitoring
 -- ============================================================================
 
 USE ROLE SYSADMIN;
@@ -15,13 +15,13 @@ USE DATABASE METEOSWISS;
 USE SCHEMA GOLD;
 
 -- ============================================================================
--- FACT TABLE: WEATHER MEASUREMENTS (STANDARD)
+-- FACT TABLE: WEATHER MEASUREMENTS (REALTIME)
 -- ============================================================================
--- Contains weather measurements at 10-minute granularity
--- Includes only historical and recent tiers (no live data)
+-- Contains all weather measurements at 10-minute granularity including live data
+-- Includes all three tiers: historical, recent, and now
 -- Optimized for business analytics with descriptive column names
 
-CREATE OR REPLACE VIEW gold.fact_weather_measurements_10min AS
+CREATE OR REPLACE VIEW gold.fact_weather_measurements_10min_realtime AS
 SELECT
     -- Dimension keys
     station_abbr AS station_key,
@@ -88,25 +88,24 @@ SELECT
     file_name AS source_file,
     loaded_at AS last_updated
 
-FROM silver.dt_weather_measurements_10min
-WHERE data_tier IN ('historical', 'recent');
+FROM silver.dt_weather_measurements_10min;
 
-COMMENT ON VIEW gold.fact_weather_measurements_10min IS
-    'Business-optimized weather measurements fact table at 10-minute granularity. Contains unified, deduplicated measurements from historical and recent tiers (excludes live "now" data) with business-friendly column names. Standard table for weather analytics and reporting.';
+COMMENT ON VIEW gold.fact_weather_measurements_10min_realtime IS
+    'Business-optimized weather measurements fact table with realtime data at 10-minute granularity. Contains unified, deduplicated measurements from all tiers (historical/recent/now) with business-friendly column names. Includes live data updates for realtime weather monitoring and analytics.';
 
 -- ============================================================================
 -- USAGE EXAMPLES
 -- ============================================================================
 
--- Basic fact table query
+-- Basic fact table query (realtime data)
 -- SELECT
 --     station_key,
 --     measurement_timestamp,
 --     temperature_2m,
 --     precipitation_mm,
 --     wind_speed_scalar_ms
--- FROM gold.fact_weather_measurements_10min
--- WHERE measurement_date >= CURRENT_DATE - 7;
+-- FROM gold.fact_weather_measurements_10min_realtime
+-- WHERE measurement_timestamp >= DATEADD('hour', -1, CURRENT_TIMESTAMP());
 
 -- Join with dimension for enriched analysis
 -- SELECT
@@ -117,10 +116,10 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min IS
 --     f.temperature_2m,
 --     f.precipitation_mm,
 --     f.wind_speed_scalar_ms
--- FROM gold.fact_weather_measurements_10min f
+-- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
 --     ON f.station_key = d.station_key
--- WHERE f.measurement_date >= CURRENT_DATE - 30
+-- WHERE f.measurement_date >= CURRENT_DATE - 7
 --     AND d.station_canton = 'GE'
 -- ORDER BY f.measurement_timestamp DESC;
 
@@ -147,10 +146,10 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min IS
 --     AVG(f.temperature_2m) as avg_temp,
 --     AVG(f.relative_humidity_pct) as avg_humidity,
 --     SUM(f.precipitation_mm) as total_precip
--- FROM gold.fact_weather_measurements_10min f
+-- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
 --     ON f.station_key = d.station_key
--- WHERE f.measurement_date >= CURRENT_DATE - 7
+-- WHERE f.measurement_date = CURRENT_DATE - 1
 -- GROUP BY d.station_name, d.station_canton, f.measurement_date, f.measurement_hour
 -- ORDER BY d.station_name, f.measurement_hour;
 
@@ -162,14 +161,14 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min IS
 --     AVG(f.temperature_2m) as avg_temperature,
 --     SUM(f.precipitation_mm) as total_precipitation,
 --     MAX(f.wind_gust_peak_ms) as max_wind_gust
--- FROM gold.fact_weather_measurements_10min f
+-- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
 --     ON f.station_key = d.station_key
--- WHERE f.measurement_date >= CURRENT_DATE - 30
+-- WHERE f.measurement_date >= CURRENT_DATE - 7
 -- GROUP BY d.station_canton, f.measurement_date
 -- ORDER BY d.station_canton, f.measurement_date;
 
--- Time series analysis - last 30 days
+-- Time series analysis - last 24 hours
 -- SELECT
 --     d.station_name,
 --     f.measurement_timestamp,
@@ -177,10 +176,10 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min IS
 --     f.relative_humidity_pct,
 --     f.precipitation_mm,
 --     f.wind_speed_scalar_ms
--- FROM gold.fact_weather_measurements_10min f
+-- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
 --     ON f.station_key = d.station_key
--- WHERE f.measurement_date >= CURRENT_DATE - 30
+-- WHERE f.measurement_timestamp >= DATEADD('hour', -24, CURRENT_TIMESTAMP())
 --     AND f.station_key IN ('BAS', 'GVE', 'ZRH')
 -- ORDER BY f.station_key, f.measurement_timestamp;
 
@@ -200,7 +199,7 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min IS
 --     MIN(f.temperature_2m) as min_temperature,
 --     SUM(f.precipitation_mm) as total_precipitation,
 --     AVG(f.global_radiation_wm2) as avg_solar_radiation
--- FROM gold.fact_weather_measurements_10min f
+-- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
 --     ON f.station_key = d.station_key
 -- WHERE f.measurement_year = YEAR(CURRENT_DATE)
@@ -216,27 +215,12 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min IS
 --     MAX(f.wind_gust_peak_ms) as max_wind_gust,
 --     MAX(f.precipitation_mm) as max_10min_precipitation,
 --     MAX(f.snow_depth_cm) as max_snow_depth
--- FROM gold.fact_weather_measurements_10min f
+-- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
 --     ON f.station_key = d.station_key
 -- WHERE f.measurement_date >= CURRENT_DATE - 30
 -- GROUP BY d.station_name, d.station_canton
 -- ORDER BY max_temperature DESC;
-
--- Yearly comparison
--- SELECT
---     d.station_name,
---     f.measurement_year,
---     AVG(f.temperature_2m) as avg_temperature,
---     SUM(f.precipitation_mm) as total_precipitation,
---     AVG(f.global_radiation_wm2) as avg_solar_radiation
--- FROM gold.fact_weather_measurements_10min f
--- JOIN gold.dim_weather_stations d
---     ON f.station_key = d.station_key
--- WHERE f.measurement_year >= YEAR(CURRENT_DATE) - 5
---     AND f.station_key = 'BAS'
--- GROUP BY d.station_name, f.measurement_year
--- ORDER BY f.measurement_year;
 
 -- ============================================================================
 -- VALIDATION QUERIES
@@ -275,14 +259,4 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min IS
 -- GROUP BY station_key, measurement_timestamp
 -- HAVING COUNT(*) > 1;
 
--- Verify data tier filtering (should only show historical and recent)
--- SELECT
---     source_tier,
---     COUNT(*) as measurement_count,
---     MIN(measurement_date) as earliest_date,
---     MAX(measurement_date) as latest_date
--- FROM gold.fact_weather_measurements_10min
--- GROUP BY source_tier
--- ORDER BY source_tier;
-
-SELECT 'Gold layer fact_weather_measurements_10min created successfully' AS result;
+SELECT 'Gold layer fact_weather_measurements_10min_realtime created successfully' AS result;
