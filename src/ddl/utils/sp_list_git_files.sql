@@ -5,6 +5,7 @@
 -- ============================================================================
 
 USE ROLE SYSADMIN;
+USE WAREHOUSE METEOSWISS_WH;
 USE DATABASE METEOSWISS;
 USE SCHEMA UTILS;
 
