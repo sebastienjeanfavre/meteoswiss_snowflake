@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS bronze.t_weather_measurements_10min_now (
 
     -- Audit columns
     file_name VARCHAR(500),
-    loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+    loaded_at TIMESTAMP_NTZ DEFAULT SYSDATE()
 );
 
 COMMENT ON TABLE bronze.t_weather_measurements_10min_now IS

@@ -226,7 +226,7 @@ def main(session: Session) -> dict:
                 TRY_CAST($30 AS NUMBER(38,10)) as osr000z0,
                 TRY_CAST($31 AS NUMBER(38,10)) as sre000z0,
                 METADATA$FILENAME as file_name,
-                CURRENT_TIMESTAMP() as loaded_at
+                SYSDATE() as loaded_at
             FROM @bronze.stg_meteoswiss_recent
         )
         PATTERN = '.*_t_recent\\.csv'

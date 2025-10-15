@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS bronze.t_weather_measurements_10min_historical (
 
     -- Audit columns
     file_name VARCHAR(500),
-    loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+    loaded_at TIMESTAMP_NTZ DEFAULT SYSDATE()
 );
 
 -- Add table and column comments
@@ -172,7 +172,7 @@ FROM (
         TRY_CAST($30 AS NUMBER(38,10)) as osr000z0,
         TRY_CAST($31 AS NUMBER(38,10)) as sre000z0,
         METADATA$FILENAME as file_name,
-        CURRENT_TIMESTAMP() as loaded_at
+        SYSDATE() as loaded_at
     FROM @bronze.stg_meteoswiss_historical
 )
 PATTERN = '.*t_historical_.*\\.csv'
@@ -181,7 +181,7 @@ FORCE = FALSE;
 
 -- Check load results
 SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
-    TABLE_NAME => 'WEATHER_MEASUREMENTS_10MIN_HISTORICAL',
+    TABLE_NAME => 'T_WEATHER_MEASUREMENTS_10MIN_HISTORICAL',
     START_TIME => DATEADD(HOURS, -1, CURRENT_TIMESTAMP())
 ));
 

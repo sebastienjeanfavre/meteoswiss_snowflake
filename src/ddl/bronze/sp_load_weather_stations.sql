@@ -134,7 +134,7 @@ def main(session: Session) -> dict:
                 $23::VARCHAR as station_url_it,
                 $24::VARCHAR as station_url_en,
                 METADATA$FILENAME as file_name,
-                CURRENT_TIMESTAMP() as loaded_at
+                SYSDATE() as loaded_at
             FROM @bronze.stg_meteoswiss_stations
         )
         PATTERN = '.*meta_stations\\.csv'
