@@ -21,7 +21,7 @@ USE SCHEMA GOLD;
 -- Includes all three tiers: historical, recent, and now
 -- Optimized for business analytics with descriptive column names
 
-CREATE OR REPLACE VIEW gold.fact_weather_measurements_10min_realtime AS
+CREATE OR REPLACE SECURE VIEW gold.fact_weather_measurements_10min_realtime AS
 SELECT
     -- Dimension keys
     station_abbr AS station_key,

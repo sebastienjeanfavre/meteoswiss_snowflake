@@ -17,7 +17,7 @@ USE SCHEMA GOLD;
 -- Type I Slowly Changing Dimension (SCD1) design
 -- Overwrites station attributes when they change (no history tracking)
 
-CREATE OR REPLACE VIEW gold.dim_weather_stations AS
+CREATE OR REPLACE SECURE VIEW gold.dim_weather_stations AS
 SELECT
     -- Surrogate key (station abbreviation as natural key)
     station_abbr AS station_key,
