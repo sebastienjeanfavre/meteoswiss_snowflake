@@ -53,25 +53,25 @@ SELECT
     ppz700s0 AS geopotential_height_700hpa,
 
     -- Wind measurements
-    fkl010z1 AS wind_speed_scalar_ms,
-    fve010z0 AS wind_speed_vector_ms,
+    fkl010z1 AS wind_speed_mean_ms,
+    fve010z0 AS wind_speed_vector_mean_ms,
     fkl010z0 AS wind_gust_peak_ms,
-    dkl010z0 AS wind_direction_degrees,
-    fu3010z0 AS gust_wind_speed_max_ms,
+    dkl010z0 AS wind_direction_mean_degrees,
+    fu3010z0 AS wind_speed_max_ms,
     fkl010z3 AS wind_speed_scalar_max_ms,
-    fu3010z1 AS gust_wind_speed_1s_ms,
-    fu3010z3 AS gust_wind_speed_3s_ms,
+    fu3010z1 AS wind_gust_1s_ms,
+    fu3010z3 AS wind_gust_3s_ms,
 
     -- Cloud cover
     wcc006s0 AS cloud_cover,
 
-    -- Precipitation (mm)
-    rre150z0 AS precipitation_mm,
+    -- Precipitation (mm) - 10-minute total
+    rre150z0 AS precipitation_total_mm,
 
     -- Solar radiation (W/m²)
-    htoauts0 AS sunshine_duration_min,
-    gre000z0 AS global_radiation_wm2,
-    sre000z0 AS reflected_radiation_wm2,
+    htoauts0 AS sunshine_duration_total_min,
+    gre000z0 AS global_radiation_mean_wm2,
+    sre000z0 AS reflected_radiation_mean_wm2,
 
     -- Snow depth (cm)
     ods000z0 AS snow_depth_cm,
@@ -102,8 +102,8 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min_realtime IS
 --     station_key,
 --     measurement_timestamp,
 --     temperature_2m,
---     precipitation_mm,
---     wind_speed_scalar_ms
+--     precipitation_total_mm,
+--     wind_speed_mean_ms
 -- FROM gold.fact_weather_measurements_10min_realtime
 -- WHERE measurement_timestamp >= DATEADD('hour', -1, CURRENT_TIMESTAMP());
 
@@ -114,8 +114,8 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min_realtime IS
 --     d.elevation_meters,
 --     f.measurement_timestamp,
 --     f.temperature_2m,
---     f.precipitation_mm,
---     f.wind_speed_scalar_ms
+--     f.precipitation_total_mm,
+--     f.wind_speed_mean_ms
 -- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
 --     ON f.station_key = d.station_key
@@ -130,8 +130,8 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min_realtime IS
 --     AVG(temperature_2m) as avg_temperature,
 --     MAX(temperature_2m) as max_temperature,
 --     MIN(temperature_2m) as min_temperature,
---     SUM(precipitation_mm) as total_precipitation,
---     AVG(wind_speed_scalar_ms) as avg_wind_speed
+--     SUM(precipitation_total_mm) as total_precipitation,
+--     AVG(wind_speed_mean_ms) as avg_wind_speed
 -- FROM gold.fact_weather_measurements_10min
 -- WHERE measurement_date >= CURRENT_DATE - 30
 -- GROUP BY station_key, measurement_date
@@ -145,7 +145,7 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min_realtime IS
 --     f.measurement_hour,
 --     AVG(f.temperature_2m) as avg_temp,
 --     AVG(f.relative_humidity_pct) as avg_humidity,
---     SUM(f.precipitation_mm) as total_precip
+--     SUM(f.precipitation_total_mm) as total_precip
 -- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
 --     ON f.station_key = d.station_key
@@ -159,7 +159,7 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min_realtime IS
 --     f.measurement_date,
 --     COUNT(DISTINCT f.station_key) as active_stations,
 --     AVG(f.temperature_2m) as avg_temperature,
---     SUM(f.precipitation_mm) as total_precipitation,
+--     SUM(f.precipitation_total_mm) as total_precipitation,
 --     MAX(f.wind_gust_peak_ms) as max_wind_gust
 -- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
@@ -174,8 +174,8 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min_realtime IS
 --     f.measurement_timestamp,
 --     f.temperature_2m,
 --     f.relative_humidity_pct,
---     f.precipitation_mm,
---     f.wind_speed_scalar_ms
+--     f.precipitation_total_mm,
+--     f.wind_speed_mean_ms
 -- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
 --     ON f.station_key = d.station_key
@@ -197,8 +197,8 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min_realtime IS
 --     AVG(f.temperature_2m) as avg_temperature,
 --     MAX(f.temperature_2m) as max_temperature,
 --     MIN(f.temperature_2m) as min_temperature,
---     SUM(f.precipitation_mm) as total_precipitation,
---     AVG(f.global_radiation_wm2) as avg_solar_radiation
+--     SUM(f.precipitation_total_mm) as total_precipitation,
+--     AVG(f.global_radiation_mean_wm2) as avg_solar_radiation
 -- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
 --     ON f.station_key = d.station_key
@@ -213,7 +213,7 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min_realtime IS
 --     MAX(f.temperature_2m) as max_temperature,
 --     MIN(f.temperature_2m) as min_temperature,
 --     MAX(f.wind_gust_peak_ms) as max_wind_gust,
---     MAX(f.precipitation_mm) as max_10min_precipitation,
+--     MAX(f.precipitation_total_mm) as max_10min_precipitation,
 --     MAX(f.snow_depth_cm) as max_snow_depth
 -- FROM gold.fact_weather_measurements_10min_realtime f
 -- JOIN gold.dim_weather_stations d
@@ -241,9 +241,9 @@ COMMENT ON VIEW gold.fact_weather_measurements_10min_realtime IS
 --     measurement_date,
 --     COUNT(*) as total_measurements,
 --     COUNT(temperature_2m) as temp_measurements,
---     COUNT(precipitation_mm) as precip_measurements,
---     COUNT(wind_speed_scalar_ms) as wind_measurements,
---     COUNT(global_radiation_wm2) as solar_measurements,
+--     COUNT(precipitation_total_mm) as precip_measurements,
+--     COUNT(wind_speed_mean_ms) as wind_measurements,
+--     COUNT(global_radiation_mean_wm2) as solar_measurements,
 --     ROUND(COUNT(temperature_2m) * 100.0 / COUNT(*), 2) as temp_completeness_pct
 -- FROM gold.fact_weather_measurements_10min
 -- WHERE measurement_date >= CURRENT_DATE - 7
