@@ -8,7 +8,15 @@
       "WebFetch(domain:github.com)",
       "Bash(mv:*)",
       "WebFetch(domain:docs.snowflake.com)",
-      "WebFetch(domain:data.geo.admin.ch)"
+      "WebFetch(domain:data.geo.admin.ch)",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "WebFetch(domain:meteoswiss.github.io)",
+      "WebFetch(domain:earthkit-data.readthedocs.io)",
+      "Bash(cat:*)",
+      "Bash(cp:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

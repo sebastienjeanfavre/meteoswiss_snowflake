@@ -157,11 +157,15 @@ snow stage list @bronze.stg_meteoswiss_historical
 
 #### Setup (run in order)
 ```sql
--- Run setup scripts 01-11 in sequence from setup/ directory
--- Scripts 01-02: SYSADMIN role
--- Scripts 03-06: ACCOUNTADMIN role (warehouse, external integrations)
--- Scripts 07-09: Measurement data infrastructure (bronze layer)
--- Script 11: Silver layer (unified measurement data)
+-- Run setup scripts 01-08 in sequence from setup/ directory
+-- Scripts 01-02: Database and schemas (SYSADMIN role)
+-- Scripts 03-06: Infrastructure (ACCOUNTADMIN role)
+--   03: Warehouse
+--   04: Network rules
+--   05: External access integration
+--   06: Git repository integration
+-- Script 07: Historical data loading setup
+-- Script 08: PyPI repository access grant (ACCOUNTADMIN role)
 ```
 
 #### Task Management
@@ -298,10 +302,11 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
   - `sp_load_weather_measurements_10min_now.sql` - Real-time measurements (10-minute refresh)
   - `sp_load_weather_stations.sql` - Weather station metadata refresh
 - `src/ddl/utils/` - Utility procedures (Git integration, SQL execution)
-- `setup/` - Infrastructure setup scripts (run once, in order)
-  - Scripts 01-06: Core infrastructure (database, schemas, external integrations)
-  - Scripts 07-09: Measurement data setup (bronze layer)
-  - Script 11: Silver layer setup (unified measurement data)
+- `setup/` - Infrastructure setup scripts (run once, in order 01-08)
+  - Scripts 01-02: Database and schemas (SYSADMIN)
+  - Scripts 03-06: Infrastructure - warehouse, network rules, external access, git (ACCOUNTADMIN)
+  - Script 07: Historical data loading setup
+  - Script 08: PyPI repository access grant (ACCOUNTADMIN)
 - `docs/` - Documentation and usage guides
   - `SILVER_LAYER_GUIDE.md` - Comprehensive silver layer usage guide
 - `meteoswiss_data/` - Downloaded CSV files (gitignored, local only)
