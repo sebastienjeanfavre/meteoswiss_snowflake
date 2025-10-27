@@ -1,0 +1,79 @@
+name: Fetch ICON-CH1 Forecast Data
+
+on:
+  # Run every 3 hours (matching ICON-CH1 update frequency)
+  schedule:
+    - cron: '0 */3 * * *'  # At minute 0 past every 3rd hour
+
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      variable:
+        description: 'Variable to fetch (e.g., ASWDIR_S)'
+        required: false
+        default: 'ASWDIR_S'
+
+jobs:
+  fetch-and-upload-forecast:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install system dependencies (ecCodes)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libeccodes-dev libeccodes-tools
+          echo "ecCodes version:"
+          eccodes_info -v
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install meteodata-lab xarray pandas numpy earthkit-data snowflake-connector-python
+
+      - name: Fetch ICON-CH1 forecast data
+        run: |
+          python3 scripts/fetch_icon_ch1_forecast.py
+          echo "Files created:"
+          ls -lh meteoswiss_data/icon_ch1_*.csv
+
+      - name: Upload to Snowflake stage
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+        run: |
+          python3 scripts/upload_to_snowflake.py
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "=========================================="
+          echo "✓ ICON-CH1 Forecast Data Upload Complete"
+          echo "=========================================="
+          echo "Timestamp: $(date -u)"
+          echo "Files uploaded:"
+          echo "  - icon_ch1_grid.csv"
+          echo "  - icon_ch1_forecast_aswdir_s.csv"
+          echo "Stage: @bronze.stg_icon_forecasts"
+          echo "=========================================="
+
+      - name: Upload workflow artifacts (for debugging)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-logs
+          path: |
+            meteoswiss_data/
+          retention-days: 7

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MeteoSwiss Weather Data Platform - A Snowflake-based data ingestion and bronze platform for weather measurements: 10-minute interval historical observations from MeteoSwiss stations using a three-tier architecture (Historical, Recent, Now).
+MeteoSwiss Weather Data Platform - A Snowflake-based data platform for weather data including:
+1. **Measurement Data**: 10-minute interval observations from MeteoSwiss stations (Historical, Recent, Now tiers)
+2. **Forecast Data**: ICON numerical weather prediction model outputs (ICON-CH1, ICON-CH2)
 
 ## Three-Tier Measurement Data Architecture
 
@@ -126,9 +128,70 @@ ALTER DYNAMIC TABLE silver.dt_weather_measurements_10min REFRESH;
 
 **Documentation**: See `docs/SILVER_LAYER_GUIDE.md` for comprehensive usage guide.
 
+## ICON Forecast Data Architecture
+
+MeteoSwiss provides numerical weather prediction forecasts from two ICON ensemble prediction systems.
+
+### ICON Model Specifications
+
+| Model | Grid Resolution | Forecast Horizon | Temporal Resolution | Update Frequency | Grid Cells |
+|-------|----------------|------------------|---------------------|------------------|------------|
+| **ICON-CH1-EPS** | ~1 km | 33 hours | 1 hour | Every 3 hours | ~1,147,980 |
+| **ICON-CH2-EPS** | ~2.1 km | 120 hours (5 days) | 1 hour | Every 6 hours | ~573,000 |
+
+### Grid Structure
+- **Native grid**: Unstructured icosahedral mesh (not regular lat/lon)
+- **Cell-based**: Each cell has a unique ID with associated lon/lat coordinates
+- **Static geometry**: Grid coordinates don't change between forecasts
+
+### Data Organization Pattern
+
+Forecast data is separated into two CSV files to avoid duplication:
+
+1. **Grid Reference File** (Static - loaded once)
+   - File: `icon_ch1_grid.csv` / `icon_ch2_grid.csv`
+   - Columns: `cell`, `lon`, `lat`
+   - Purpose: Maps cell IDs to geographic coordinates
+
+2. **Forecast Data Files** (Time-varying - per forecast run)
+   - File pattern: `icon_ch1_forecast_{variable}_{timestamp}.csv`
+   - Columns: `cell`, `lead_time_0h`, `lead_time_1h`, ..., `lead_time_33h`
+   - Wide format: One row per cell, one column per lead time
+
+### Available Variables
+- **ASWDIR_S**: Direct shortwave radiation (W/m²)
+- **ASWDIFD_S**: Diffuse shortwave radiation (W/m²)
+- **T_2M**: Temperature at 2m (K)
+- **Additional variables**: Available via MeteoSwiss OGD API
+
+### Data Flow Patterns
+
+#### Option A: Automated via GitHub Actions (Recommended)
+```
+[Scheduled: Every 3 hours]
+MeteoSwiss OGD API → GitHub Actions Runner (Python + ecCodes)
+→ CSV Generation (in-memory)
+→ Snowflake CLI Upload → Internal Stage
+→ Ready for COPY INTO
+```
+
+**Setup**: See `.github/GITHUB_ACTIONS_SETUP.md` for configuration guide
+
+#### Option B: Manual via Local Script
+```
+MeteoSwiss OGD API → Python Script (fetch_icon_ch1_forecast.py)
+→ Local CSV Files
+→ Snowflake CLI Upload → Internal Stage
+→ Ready for COPY INTO
+```
+
+**Note**: Stored procedure approach is **not viable** due to ecCodes dependency (C library required for GRIB2 decoding) which cannot be installed in Snowflake's Python runtime. Use GitHub Actions for automation or manual script approach.
+
 ## Commands
 
-### Python Data Fetching (Legacy - Optional)
+### Python Data Fetching
+
+#### Measurement Data (Legacy - Optional)
 ```bash
 # These scripts are legacy methods - Snowpark procedures are now recommended
 
@@ -140,6 +203,21 @@ python scripts/fetch_recent_data.py
 
 # Download now data (only needed if testing Python script)
 python scripts/fetch_now_data.py
+```
+
+#### ICON Forecast Data
+```bash
+# Fetch ICON-CH1 forecast data (generates two CSV files)
+python scripts/fetch_icon_ch1_forecast.py
+# Outputs:
+#   - meteoswiss_data/icon_ch1_grid.csv (static grid reference)
+#   - meteoswiss_data/icon_ch1_forecast_aswdir_s.csv (forecast values)
+
+# Upload CSV files to Snowflake stage (requires environment variables)
+# Set: SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PASSWORD
+bash scripts/upload_icon_ch1_to_snowflake.sh
+# OR directly with Python:
+python scripts/upload_to_snowflake.py
 ```
 
 ### Snowflake CLI Commands (Legacy - Optional)
@@ -204,7 +282,8 @@ EXECUTE TASK common.task_bronze_load_weather_measurements_10min_now;
 CALL bronze.sp_load_weather_measurements_10min_recent();
 CALL bronze.sp_load_weather_measurements_10min_now();
 
--- Note: Historical data SP has been removed - use legacy Python script + CLI method
+-- Note: Historical measurement data SP has been removed - use legacy Python script + CLI method
+-- Note: ICON forecast data SP is not viable - use manual Python script + upload method
 
 -- Execute SQL from Git repository
 CALL utils.sp_execute_sql_from_git('src/ddl/bronze/table.sql');
@@ -229,9 +308,18 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 ## Key Technical Details
 
 ### API Integration
+
+#### Measurement Data (STAC API)
 - **Endpoint**: https://data.geo.admin.ch/api/stac/v1
 - **Collection**: ch.meteoschweiz.ogd-smn (Swiss Meteorological Network)
 - **Pagination**: Uses cursor-based pagination with 100 items per page
+- **Authentication**: None required (Open Government Data)
+
+#### Forecast Data (OGD API via meteodatalab)
+- **Library**: meteodatalab (Python package from MeteoSwiss)
+- **Collections**: ogd-forecasting-icon-ch1, ogd-forecasting-icon-ch2
+- **Data format**: GRIB2 files (converted to xarray/CSV by meteodatalab)
+- **Access method**: meteodatalab.ogd_api.Request with horizon parameter
 - **Authentication**: None required (Open Government Data)
 
 ### Snowflake Objects
@@ -244,8 +332,15 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 - **External Access Integration**: meteoswiss_integration (for API access)
 - **Network Rule**: meteoswiss_network_rule (allows data.geo.admin.ch)
 - **Git Repository**: utils.meteoswiss_repo (version control integration)
-- **Stages**: stg_meteoswiss_historical, stg_meteoswiss_recent, stg_meteoswiss_now, stg_meteoswiss_stations
-- **File Format**: ff_meteoswiss_csv (semicolon-delimited CSV)
+- **Stages**:
+  - Measurement data: stg_meteoswiss_historical, stg_meteoswiss_recent, stg_meteoswiss_now, stg_meteoswiss_stations
+  - Forecast data: stg_icon_forecasts
+- **File Formats**:
+  - ff_meteoswiss_csv (semicolon-delimited CSV for measurement data)
+  - ff_icon_forecast_csv (comma-delimited CSV for forecast data)
+- **Stored Procedures**:
+  - Measurement data: sp_load_weather_measurements_10min_recent, sp_load_weather_measurements_10min_now
+  - Note: ICON forecast data uses manual Python script approach (no stored procedure)
 
 ### CSV File Format
 - **Delimiter**: Semicolon (;)
@@ -296,20 +391,40 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 
 ## File Organization
 
-- `scripts/` - Python scripts for historical measurement data download (local execution, legacy)
-- `src/ddl/bronze/` - Snowpark procedures and tasks for automated data refresh
-  - `sp_load_weather_measurements_10min_recent.sql` - Recent measurements (daily refresh)
-  - `sp_load_weather_measurements_10min_now.sql` - Real-time measurements (10-minute refresh)
-  - `sp_load_weather_stations.sql` - Weather station metadata refresh
+- `scripts/` - Python scripts for data fetching (local execution)
+  - **Measurement data**: `fetch_historical_data.py` (legacy method)
+  - **Forecast data**:
+    - `fetch_icon_ch1_forecast.py` - Fetch ICON-CH1 forecast data
+    - `upload_to_snowflake.py` - Upload CSVs to Snowflake using Python connector
+    - `upload_icon_ch1_to_snowflake.sh` - Shell wrapper for fetch + upload
+- `src/ddl/bronze/` - Bronze layer DDL (stages, file formats, procedures, tables)
+  - **Measurement data procedures**:
+    - `sp_load_weather_measurements_10min_recent.sql` - Recent measurements (daily refresh)
+    - `sp_load_weather_measurements_10min_now.sql` - Real-time measurements (10-minute refresh)
+    - `sp_load_weather_stations.sql` - Weather station metadata refresh
+  - **Forecast data infrastructure**:
+    - `ff_icon_forecast_csv.sql` - File format for ICON forecast CSVs
+    - `stg_icon_forecasts.sql` - Stage for ICON forecast data
+    - `sp_load_icon_ch1_forecast.sql` - (Reference only - not viable due to ecCodes dependency)
+  - **Measurement data infrastructure**:
+    - `ff_meteoswiss_csv.sql` - File format for measurement CSVs
+    - `stg_meteoswiss_*.sql` - Stages for measurement data
+    - `t_weather_*.sql` - Table definitions
 - `src/ddl/utils/` - Utility procedures (Git integration, SQL execution)
 - `setup/` - Infrastructure setup scripts (run once, in order 01-08)
   - Scripts 01-02: Database and schemas (SYSADMIN)
   - Scripts 03-06: Infrastructure - warehouse, network rules, external access, git (ACCOUNTADMIN)
   - Script 07: Historical data loading setup
   - Script 08: PyPI repository access grant (ACCOUNTADMIN)
+- `.github/workflows/` - GitHub Actions automation
+  - `fetch_icon_ch1_forecast.yml` - Automated ICON-CH1 forecast ingestion (runs every 3 hours)
+  - `GITHUB_ACTIONS_SETUP.md` - Setup guide for GitHub Actions automation
 - `docs/` - Documentation and usage guides
   - `SILVER_LAYER_GUIDE.md` - Comprehensive silver layer usage guide
 - `meteoswiss_data/` - Downloaded CSV files (gitignored, local only)
+  - `historical/` - Historical measurement data
+  - `icon_ch1_grid.csv` - ICON-CH1 grid reference (static)
+  - `icon_ch1_forecast_*.csv` - ICON-CH1 forecast data files
 
 ## Important Constraints
 
@@ -320,8 +435,20 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 - Recent/Now data fully automated via Snowpark with scheduled Tasks (no external dependencies)
 - Bronze tables are never empty during refresh - INSERT OVERWRITE ensures atomic data replacement
 
+**Forecast Data (ICON):**
+- **CRITICAL**: Stored procedure approach is NOT viable - ecCodes C library dependency cannot be installed in Snowflake
+- **Automation**: Use GitHub Actions (recommended) - runs every 3 hours automatically in the cloud
+  - See `.github/GITHUB_ACTIONS_SETUP.md` for setup instructions
+  - Free within GitHub Actions limits (2000 min/month private repos, unlimited public)
+  - No infrastructure required - runs on GitHub's cloud runners
+- **Manual alternative**: Python script locally → CSV files → Snowflake CLI upload
+- Python environment requirements: meteodatalab, xarray, earthkit-data, pandas, numpy, ecCodes
+- Large data volumes: ICON-CH1 = ~1.15M cells × 34 lead times = ~39M values per variable
+- Grid reference file is static and only needs to be loaded once
+- Forecast data files contain timestamps in filename to track different forecast runs
+- Wide format CSV: One row per cell, one column per lead time (efficient for storage and querying)
+
 **General:**
 - Tasks are created in SUSPENDED state by default - must RESUME manually
 - ACCOUNTADMIN role required for External Access Integration and Network Rules
 - Windows environment: Use Git Bash or similar for Unix-style commands
-- to memorize
