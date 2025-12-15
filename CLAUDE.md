@@ -106,11 +106,15 @@ FROM silver.dt_weather_measurements_10min
 GROUP BY station_abbr, reference_timestamp
 HAVING COUNT(*) > 1;
 
--- Monitor overlaps
-SELECT * FROM silver.data_quality_overlaps;
-
--- Check completeness by station
-SELECT * FROM silver.data_quality_completeness;
+-- Check data coverage by station
+SELECT
+    station_abbr,
+    MIN(reference_timestamp) as earliest_record,
+    MAX(reference_timestamp) as latest_record,
+    COUNT(*) as total_records
+FROM silver.dt_weather_measurements_10min
+GROUP BY station_abbr
+ORDER BY station_abbr;
 ```
 
 ### Dynamic Table Management
@@ -125,8 +129,6 @@ ALTER DYNAMIC TABLE silver.dt_weather_measurements_10min RESUME;
 -- Manual refresh if needed
 ALTER DYNAMIC TABLE silver.dt_weather_measurements_10min REFRESH;
 ```
-
-**Documentation**: See `docs/SILVER_LAYER_GUIDE.md` for comprehensive usage guide.
 
 ## ICON Forecast Data Architecture
 
@@ -235,15 +237,14 @@ snow stage list @bronze.stg_meteoswiss_historical
 
 #### Setup (run in order)
 ```sql
--- Run setup scripts 01-08 in sequence from setup/ directory
+-- Run setup scripts 01-07 in sequence from setup/ directory
 -- Scripts 01-02: Database and schemas (SYSADMIN role)
--- Scripts 03-06: Infrastructure (ACCOUNTADMIN role)
+-- Scripts 03-05: Infrastructure (ACCOUNTADMIN role)
 --   03: Warehouse
 --   04: Network rules
 --   05: External access integration
---   06: Git repository integration
--- Script 07: Historical data loading setup
--- Script 08: PyPI repository access grant (ACCOUNTADMIN role)
+-- Script 06: Historical data loading setup
+-- Script 07: PyPI repository access grant (ACCOUNTADMIN role)
 ```
 
 #### Task Management
@@ -284,9 +285,6 @@ CALL bronze.sp_load_weather_measurements_10min_now();
 
 -- Note: Historical measurement data SP has been removed - use legacy Python script + CLI method
 -- Note: ICON forecast data SP is not viable - use manual Python script + upload method
-
--- Execute SQL from Git repository
-CALL utils.sp_execute_sql_from_git('src/ddl/bronze/table.sql');
 ```
 
 #### Data Validation
@@ -327,14 +325,13 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 - **Schemas**:
   - `bronze` - Bronze layer (raw data from MeteoSwiss)
   - `silver` - Silver layer (unified, deduplicated data)
-  - `utils` - Utility procedures and functions
+  - `common` - Common layer (tasks for orchestration)
 - **Warehouse**: METEOSWISS_WH
 - **External Access Integration**: meteoswiss_integration (for API access)
 - **Network Rule**: meteoswiss_network_rule (allows data.geo.admin.ch)
-- **Git Repository**: utils.meteoswiss_repo (version control integration)
 - **Stages**:
   - Measurement data: stg_meteoswiss_historical, stg_meteoswiss_recent, stg_meteoswiss_now, stg_meteoswiss_stations
-  - Forecast data: stg_icon_forecasts
+  - Forecast data: stg_icon_ch1
 - **File Formats**:
   - ff_meteoswiss_csv (semicolon-delimited CSV for measurement data)
   - ff_icon_forecast_csv (comma-delimited CSV for forecast data)
@@ -362,18 +359,18 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 ## Common Workflows
 
 ### Adding New Stored Procedures
-1. Create SQL file in `src/ddl/bronze/` or `src/ddl/utils/`
+1. Create SQL file in `src/bronze/` or appropriate schema directory
 2. Use Snowpark Python runtime 3.12 for procedures requiring API access
 3. Specify EXTERNAL_ACCESS_INTEGRATIONS = (meteoswiss_integration) for HTTP calls
 4. Add procedure comments for documentation
 5. Commit to Git repository
-6. Deploy via Git integration or direct execution
+6. Deploy via direct execution in Snowflake
 
 ### Modifying Data Loading Logic
 
 **Measurement Data:**
-- **Recent data**: Edit `src/ddl/bronze/sp_load_weather_measurements_10min_recent.sql`
-- **Now data**: Edit `src/ddl/bronze/sp_load_weather_measurements_10min_now.sql`
+- **Recent data**: Edit `src/bronze/sp_load_weather_measurements_10min_recent.sql`
+- **Now data**: Edit `src/bronze/sp_load_weather_measurements_10min_now.sql`
 - **Historical data**: No automated SP available - use legacy Python script method
 - Recent/Now procedures use temp table + INSERT OVERWRITE pattern to ensure bronze tables never empty:
   1. Create temp table with same structure
@@ -397,30 +394,30 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
     - `fetch_icon_ch1_forecast.py` - Fetch ICON-CH1 forecast data
     - `upload_to_snowflake.py` - Upload CSVs to Snowflake using Python connector
     - `upload_icon_ch1_to_snowflake.sh` - Shell wrapper for fetch + upload
-- `src/ddl/bronze/` - Bronze layer DDL (stages, file formats, procedures, tables)
+- `src/bronze/` - Bronze layer DDL (stages, file formats, procedures, tables)
   - **Measurement data procedures**:
     - `sp_load_weather_measurements_10min_recent.sql` - Recent measurements (daily refresh)
     - `sp_load_weather_measurements_10min_now.sql` - Real-time measurements (10-minute refresh)
     - `sp_load_weather_stations.sql` - Weather station metadata refresh
   - **Forecast data infrastructure**:
     - `ff_icon_forecast_csv.sql` - File format for ICON forecast CSVs
-    - `stg_icon_forecasts.sql` - Stage for ICON forecast data
+    - `stg_icon_ch1.sql` - Stage for ICON forecast data
     - `sp_load_icon_ch1_forecast.sql` - (Reference only - not viable due to ecCodes dependency)
   - **Measurement data infrastructure**:
     - `ff_meteoswiss_csv.sql` - File format for measurement CSVs
     - `stg_meteoswiss_*.sql` - Stages for measurement data
     - `t_weather_*.sql` - Table definitions
-- `src/ddl/utils/` - Utility procedures (Git integration, SQL execution)
-- `setup/` - Infrastructure setup scripts (run once, in order 01-08)
+- `src/silver/` - Silver layer DDL (dynamic tables, views)
+- `src/gold/` - Gold layer DDL (secure views for business metrics)
+- `src/common/` - Common layer DDL (tasks for orchestration)
+- `setup/` - Infrastructure setup scripts (run once, in order 01-07)
   - Scripts 01-02: Database and schemas (SYSADMIN)
-  - Scripts 03-06: Infrastructure - warehouse, network rules, external access, git (ACCOUNTADMIN)
-  - Script 07: Historical data loading setup
-  - Script 08: PyPI repository access grant (ACCOUNTADMIN)
+  - Scripts 03-05: Infrastructure - warehouse, network rules, external access (ACCOUNTADMIN)
+  - Script 06: Historical data loading setup
+  - Script 07: PyPI repository access grant (ACCOUNTADMIN)
 - `.github/workflows/` - GitHub Actions automation
   - `fetch_icon_ch1_forecast.yml` - Automated ICON-CH1 forecast ingestion (runs every 3 hours)
   - `GITHUB_ACTIONS_SETUP.md` - Setup guide for GitHub Actions automation
-- `docs/` - Documentation and usage guides
-  - `SILVER_LAYER_GUIDE.md` - Comprehensive silver layer usage guide
 - `meteoswiss_data/` - Downloaded CSV files (gitignored, local only)
   - `historical/` - Historical measurement data
   - `icon_ch1_grid.csv` - ICON-CH1 grid reference (static)

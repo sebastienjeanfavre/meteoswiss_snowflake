@@ -69,7 +69,7 @@ def upload_files_to_stage():
         # Upload grid reference file
         print(f"Uploading {grid_file.name}...")
         grid_put_sql = f"""
-        PUT file://{grid_file.absolute()} @bronze.stg_icon_forecasts
+        PUT file://{grid_file.absolute()} @bronze.stg_icon_ch1
         AUTO_COMPRESS = FALSE
         OVERWRITE = TRUE
         """
@@ -80,7 +80,7 @@ def upload_files_to_stage():
         # Upload forecast data file
         print(f"\nUploading {forecast_file.name}...")
         forecast_put_sql = f"""
-        PUT file://{forecast_file.absolute()} @bronze.stg_icon_forecasts
+        PUT file://{forecast_file.absolute()} @bronze.stg_icon_ch1
         AUTO_COMPRESS = FALSE
         OVERWRITE = TRUE
         """
@@ -90,7 +90,7 @@ def upload_files_to_stage():
 
         # List files in stage to verify
         print("\nVerifying uploads - files in stage:")
-        cursor.execute("LIST @bronze.stg_icon_forecasts")
+        cursor.execute("LIST @bronze.stg_icon_ch1")
         files = cursor.fetchall()
         for file_info in files:
             print(f"  - {file_info[0]}")

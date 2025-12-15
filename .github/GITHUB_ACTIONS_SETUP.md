@@ -7,7 +7,7 @@ This guide explains how to set up automated ICON-CH1 forecast data ingestion usi
 The workflow automatically:
 1. Fetches ICON-CH1 forecast data from MeteoSwiss OGD API every 3 hours
 2. Generates two CSV files (grid reference + forecast data)
-3. Uploads files to Snowflake stage `@bronze.stg_icon_forecasts` using Python Snowflake connector
+3. Uploads files to Snowflake stage `@bronze.stg_icon_ch1` using Python Snowflake connector
 
 **Schedule**: Every 3 hours (matches ICON-CH1 update frequency)
 **Cost**: Free (within GitHub Actions limits)
@@ -18,7 +18,7 @@ The workflow automatically:
 
 1. ✅ Your code must be in a GitHub repository (public or private)
 2. ✅ Snowflake account with credentials
-3. ✅ Stage `@bronze.stg_icon_forecasts` must exist in Snowflake
+3. ✅ Stage `@bronze.stg_icon_ch1` must exist in Snowflake
 
 ## Setup Instructions
 
@@ -62,7 +62,7 @@ After the workflow runs:
 
 ```sql
 -- Check files in Snowflake stage
-LIST @bronze.stg_icon_forecasts;
+LIST @bronze.stg_icon_ch1;
 
 -- Expected files:
 -- icon_ch1_grid.csv
@@ -75,8 +75,8 @@ LIST @bronze.stg_icon_forecasts;
 - Check that all Snowflake secrets are set correctly in GitHub
 - Verify your Snowflake account identifier format (e.g., `abc12345.us-east-1` or `orgname-accountname`)
 - Ensure the user has access to the database/warehouse
-- Verify user has USAGE privilege on the stage: `GRANT USAGE ON STAGE bronze.stg_icon_forecasts TO ROLE SYSADMIN;`
-- Check user has WRITE permission on the stage: `GRANT WRITE ON STAGE bronze.stg_icon_forecasts TO ROLE SYSADMIN;`
+- Verify user has USAGE privilege on the stage: `GRANT USAGE ON STAGE bronze.stg_icon_ch1 TO ROLE SYSADMIN;`
+- Check user has WRITE permission on the stage: `GRANT WRITE ON STAGE bronze.stg_icon_ch1 TO ROLE SYSADMIN;`
 
 ### Workflow fails at "Install system dependencies"
 - This is rare - GitHub's Ubuntu runners should have the required packages
@@ -90,9 +90,9 @@ LIST @bronze.stg_icon_forecasts;
 - Network connectivity issues (rare with GitHub runners)
 
 ### Files not appearing in Snowflake stage
-- Verify the stage exists: `SHOW STAGES LIKE 'stg_icon_forecasts' IN SCHEMA bronze;`
+- Verify the stage exists: `SHOW STAGES LIKE 'stg_icon_ch1' IN SCHEMA bronze;`
 - Check upload step logs for errors
-- Run: `LIST @bronze.stg_icon_forecasts;` to see if files are there
+- Run: `LIST @bronze.stg_icon_ch1;` to see if files are there
 - Verify file sizes are reasonable (grid ~50MB, forecast ~150MB)
 
 ## Workflow Details

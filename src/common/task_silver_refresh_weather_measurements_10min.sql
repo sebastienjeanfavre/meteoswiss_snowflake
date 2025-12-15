@@ -2,9 +2,9 @@
 -- Scheduled Task: Refresh Silver Layer Measurements
 -- ============================================================================
 -- This task refreshes the unified weather measurements dynamic table after
--- the bronze layer now data has been updated.
+-- the bronze layer recent data has been updated.
 --
--- Trigger: After common.task_bronze_now_data completes successfully
+-- Trigger: After common.task_bronze_load_weather_measurements_10min_recent completes successfully
 -- Warehouse: METEOSWISS_WH
 -- ============================================================================
 
@@ -15,7 +15,7 @@ USE SCHEMA COMMON;
 -- Create the task with dependency on bronze task
 CREATE OR REPLACE TASK common.task_silver_refresh_weather_measurements_10min
     WAREHOUSE = METEOSWISS_WH
-    COMMENT = 'Refreshes the unified weather measurements dynamic table after bronze now data is updated'
+    COMMENT = 'Refreshes the unified weather measurements dynamic table after bronze recent data is updated'
     AFTER common.task_bronze_load_weather_measurements_10min_recent
 AS
     ALTER DYNAMIC TABLE silver.dt_weather_measurements_10min REFRESH;
@@ -24,9 +24,9 @@ AS
 -- To enable the task, run:
 ALTER TASK common.task_silver_refresh_weather_measurements_10min RESUME;
 
--- IMPORTANT: The parent task (common.task_bronze_load_weather_measurements_10min_now) must be running
+-- IMPORTANT: The parent task (common.task_bronze_load_weather_measurements_10min_recent) must be running
 -- for this child task to execute. Resume order:
--- 1. ALTER TASK common.task_bronze_load_weather_measurements_10min_now RESUME;
+-- 1. ALTER TASK common.task_bronze_load_weather_measurements_10min_recent RESUME;
 -- 2. ALTER TASK common.task_silver_refresh_weather_measurements_10min RESUME;
 
 -- To check task status:
@@ -51,6 +51,6 @@ ALTER TASK common.task_silver_refresh_weather_measurements_10min RESUME;
 --     state,
 --     predecessors
 -- FROM TABLE(INFORMATION_SCHEMA.TASK_DEPENDENTS(
---     TASK_NAME => 'common.task_bronze_load_weather_measurements_10min_now',
+--     TASK_NAME => 'common.task_bronze_load_weather_measurements_10min_recent',
 --     RECURSIVE => TRUE
 -- ));

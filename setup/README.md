@@ -1,67 +1,67 @@
-# MeteoSwiss Setup Phase
+# MeteoSwiss Setup Scripts
 
-This directory contains all infrastructure setup scripts organized in two phases based on required Snowflake role permissions.
+This directory contains infrastructure setup scripts for the MeteoSwiss Snowflake platform. Scripts are organized by required role permissions and must be executed in numerical order.
 
-## Setup Phases
+## Setup Scripts (01-07)
 
-### SYSADMIN Phase - Basic Infrastructure
+### Phase 1: Database Infrastructure (SYSADMIN)
 Basic database infrastructure that can be created by SYSADMIN role:
 
-1. `01_create_database.sql` - Create METEOSWISS database
-2. `02_create_schemas.sql` - Create bronze and utils schemas
-3. `03_create_warehouse.sql` - Create METEOSWISS_WH warehouse (requires ACCOUNTADMIN)
+1. **`01_create_database.sql`** - Create METEOSWISS database
+2. **`02_create_schemas.sql`** - Create bronze, silver, gold, and common schemas
 
-### ACCOUNTADMIN Phase - External Integrations
+### Phase 2: External Integrations (ACCOUNTADMIN)
 Advanced features requiring ACCOUNTADMIN privileges:
 
-4. `04_create_nwr.sql` - Network rule for MeteoSwiss API access
-5. `05_create_eai.sql` - External access integration for API calls
-6. `06_create_git_repository.sql` - Git repository for version control
+3. **`03_create_warehouse.sql`** - Create METEOSWISS_WH warehouse
+4. **`04_create_nwr.sql`** - Network rule for MeteoSwiss API access (allows data.geo.admin.ch)
+5. **`05_create_eai.sql`** - External access integration for API calls from stored procedures
 
-### Data Infrastructure Phase
-Setup for weather measurement data (bronze and silver layers):
+### Phase 3: Data Infrastructure (SYSADMIN)
+Setup for weather data loading:
 
-7. `07_load_historical_data.sql` - Historical weather measurements setup
-8. `08_load_recent_data.sql` - Recent weather measurements setup
-9. `09_load_now_data.sql` - Real-time weather measurements setup
-11. `11_create_silver_layer.sql` - Unified measurement data (silver layer)
+6. **`06_load_historical_data.sql`** - Historical weather measurements setup (legacy Python script method)
+7. **`07_grant_pypi_access.sql`** - Grant access to Snowflake PyPI repository (ACCOUNTADMIN)
 
 ## Execution Order
 
-**Run scripts in numerical order** - dependencies are structured so each script builds on the previous ones.
+**Run scripts in numerical order (01-07)** - dependencies are structured so each script builds on the previous ones.
 
 **Role switching:**
-- Scripts 1-2: Can use SYSADMIN
-- Script 3: Requires ACCOUNTADMIN (warehouse creation)
-- Scripts 4-6: Require ACCOUNTADMIN (external integrations)
-- Scripts 7-9, 11: Can use SYSADMIN (data infrastructure - bronze + silver)
-
-## Integration Setup
-
-The `integration/` subdirectory contains additional setup files:
-- Git API integration configuration
-- Authentication secrets setup
+- Scripts 01-02: SYSADMIN role
+- Scripts 03-05: ACCOUNTADMIN role (external integrations)
+- Script 06: SYSADMIN role
+- Script 07: ACCOUNTADMIN role (PyPI access)
 
 ## Quick Start
 
-For a complete setup, run scripts 01-09 and 11 in order:
-
 ```sql
--- Core Infrastructure (ACCOUNTADMIN)
+-- Phase 1: Database Infrastructure (SYSADMIN)
+USE ROLE SYSADMIN;
 -- 01_create_database.sql
 -- 02_create_schemas.sql
+
+-- Phase 2: External Integrations (ACCOUNTADMIN)
+USE ROLE ACCOUNTADMIN;
 -- 03_create_warehouse.sql
 -- 04_create_nwr.sql
 -- 05_create_eai.sql
--- 06_create_git_repository.sql
 
--- Data Infrastructure - Bronze Layer (SYSADMIN)
--- 07_load_historical_data.sql
--- 08_load_recent_data.sql
--- 09_load_now_data.sql
+-- Phase 3: Data Infrastructure
+USE ROLE SYSADMIN;
+-- 06_load_historical_data.sql
 
--- Data Infrastructure - Silver Layer (SYSADMIN)
--- 11_create_silver_layer.sql
+USE ROLE ACCOUNTADMIN;
+-- 07_grant_pypi_access.sql
 ```
 
-After setup, deploy stored procedures and tasks from `src/ddl/bronze/`
+## Post-Setup Deployment
+
+After running setup scripts, deploy the application objects from `src/` directory:
+
+1. **Bronze layer**: Deploy stages, file formats, tables, and stored procedures from `src/bronze/`
+2. **Silver layer**: Deploy dynamic tables and views from `src/silver/`
+3. **Gold layer**: Deploy secure views from `src/gold/`
+4. **Common layer**: Deploy and resume tasks from `src/common/`
+
+See `CLAUDE.md` for detailed deployment instructions and workflow documentation.

@@ -28,7 +28,7 @@ CREATE STAGE IF NOT EXISTS bronze.stg_icon_ch1
     COMMENT = 'Stage for ICON-CH1/CH2 numerical weather forecast data CSV files (grid reference and forecast data)';
 
 -- To list files in stage:
--- LIST @bronze.stg_icon_forecasts;
+-- LIST @bronze.stg_icon_ch1;
 
 -- To remove all files from stage (use with caution):
--- REMOVE @bronze.stg_icon_forecasts;
+-- REMOVE @bronze.stg_icon_ch1;
